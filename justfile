@@ -15,9 +15,9 @@ test:
 build:
     ./gradlew packageAppImage
 
-# Build the distributable AppImage file into _apk/.
+# Build the AppImage and stage a timestamped copy in _apk/.
 build-appimage:
-    ./gradlew packageAppImageFile
+    ./gradlew stageAppImage
 
 # Run the packaged app. LD_LIBRARY_PATH is scrubbed because terminals spawned
 # from AppImage-hosted editors (e.g. T3 Code) inject their mount's lib dir,

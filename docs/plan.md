@@ -114,6 +114,12 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 
 ## Out of scope (for now)
 
+- [x] Save successful provider lyrics and manual picks under
+      `$XDG_DATA_HOME/lyricsfloat/lyrics` (or `~/.local/share/lyricsfloat/lyrics`)
+      so previously fetched lyrics work after restart and offline.
+- [x] Add a Start on login setting using an XDG autostart entry for the
+      installed launcher or AppImage; refresh its path on launch.
+
 - Translation (OpenRouter/DeepL) — Metrolist has it, desktop port pending a
   decisions pass on API keys.
 - Romaji for Korean/Chinese/Cyrillic — JP only until the user asks.

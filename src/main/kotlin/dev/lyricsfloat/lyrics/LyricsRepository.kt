@@ -4,12 +4,14 @@ import dev.lyricsfloat.mpris.NowPlayingMonitor
 import dev.lyricsfloat.mpris.TrackInfo
 import dev.lyricsfloat.platform.AppState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -38,7 +40,7 @@ data class LyricsState(
 /**
  * Keeps [current] following the MPRIS playback: fetches lyrics per track by
  * walking the enabled provider chain (Metrolist's sequential fallback),
- * caches results in memory, and applies per-track manual overrides.
+ * caches results in memory and on disk, and applies per-track manual overrides.
  */
 class LyricsRepository(private val scope: CoroutineScope) {
     /**
@@ -55,6 +57,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
     )
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val diskCache = LyricsDiskCache()
 
     private val currentInternal = MutableStateFlow(LyricsState.EMPTY)
     val current: StateFlow<LyricsState> = currentInternal.asStateFlow()
@@ -176,9 +179,15 @@ class LyricsRepository(private val scope: CoroutineScope) {
     }
 
     private suspend fun load(track: TrackInfo, key: String): LyricsState {
+        withContext(Dispatchers.IO) { diskCache.read(track) }?.let { saved ->
+            if (saved.manual == overrides.containsKey(key)) {
+                return toState(track, key, saved.text, saved.provider, saved.manual)
+            }
+        }
         // A manual pick wins over anything automatic.
         overrides[key]?.let { entry ->
             fetchOverrideText(entry).text?.let { text ->
+                withContext(Dispatchers.IO) { diskCache.write(track, text, entry.provider ?: "Lrclib", true) }
                 return toState(track, key, text, entry.provider ?: "Lrclib", fromOverride = true)
             }
         }
@@ -217,7 +226,9 @@ class LyricsRepository(private val scope: CoroutineScope) {
                 provider.getLyrics(track.title, track.artist, track.lengthMs).getOrNull()
             }
             if (!text.isNullOrBlank()) {
-                return toState(track, key, LyricsParser.filterCreditLines(text), provider.name)
+                val cleaned = LyricsParser.filterCreditLines(text)
+                withContext(Dispatchers.IO) { diskCache.write(track, cleaned, provider.name, false) }
+                return toState(track, key, cleaned, provider.name)
             }
         }
         return LyricsState(key, track.title, track.artist, emptyList(), synced = false, provider = null, fromOverride = false)
@@ -279,6 +290,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
         }
         overrides[key] = entry
         saveOverrides()
+        withContext(Dispatchers.IO) { diskCache.remove(track) }
         loadJob?.cancel()
         val previous = cache.remove(key)
         overrideTargetKey = key
@@ -286,6 +298,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
         // Try the pick itself first: one focused request, fast feedback.
         val fetched = fetchOverrideText(entry)
         val state = if (fetched.text != null) {
+            withContext(Dispatchers.IO) { diskCache.write(track, fetched.text, entry.provider ?: "Lrclib", true) }
             toState(track, key, fetched.text, entry.provider ?: "Lrclib", fromOverride = true)
         } else {
             // Pick failed: fall back to what was showing (or the auto chain).
@@ -304,6 +317,8 @@ class LyricsRepository(private val scope: CoroutineScope) {
         if (key.isEmpty()) return
         overrides.remove(key)
         saveOverrides()
+        trackInfoByKey[key]?.let { track -> diskCache.remove(track) }
+        cache.remove(key)
         refresh(key)
     }
 

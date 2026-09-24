@@ -60,10 +60,10 @@ just dev
 ## Install
 
 ```bash
-just build-appimage   # or: ./gradlew packageAppImageFile
+just build-appimage   # or: ./gradlew stageAppImage
 ```
 
-The AppImage lands in `_apk/`.
+The timestamped AppImage lands in `_apk/`. The build output stays under `build/compose/binaries/main/appimage/`.
 
 ## Wayland notes
 

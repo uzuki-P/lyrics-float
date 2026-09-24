@@ -31,6 +31,7 @@ import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.lyrics.LyricsRepository
 import dev.lyricsfloat.mpris.NowPlayingMonitor
 import dev.lyricsfloat.platform.AppState
+import dev.lyricsfloat.platform.Autostart
 import dev.lyricsfloat.platform.LinuxSniTray
 import dev.lyricsfloat.platform.LinuxWindowMover
 import dev.lyricsfloat.platform.WindowAnchor
@@ -101,6 +102,7 @@ fun main() = application {
         // Load JNA's native side before the first drag so the window does not
         // lag behind the cursor.
         scope.launch(Dispatchers.IO) { LinuxWindowMover.warmUp() }
+        scope.launch(Dispatchers.IO) { Autostart.refresh() }
     }
     LaunchedEffect(preferredPlayer) {
         monitor.preferredIdentity = preferredPlayer

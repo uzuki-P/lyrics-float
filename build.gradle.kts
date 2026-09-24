@@ -1,4 +1,8 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.net.URI
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 plugins {
     kotlin("jvm") version "2.4.20"
@@ -64,5 +68,77 @@ compose.desktop {
                 iconFile.set(project.file("src/main/resources/icons/lyrics-float-v2.png"))
             }
         }
+    }
+}
+
+// Compose's packageAppImage task creates a jpackage app directory. Wrap that
+// directory with appimagetool to produce the portable .AppImage download.
+tasks.register("packageAppImageFile") {
+    dependsOn("packageAppImage")
+    val appBundle = layout.buildDirectory.dir("compose/binaries/main/app/lyrics-float")
+    val appDir = layout.buildDirectory.dir("compose/binaries/main/appimage/lyrics-float.AppDir")
+    val outputDir = layout.buildDirectory.dir("compose/binaries/main/appimage")
+    val toolFile = File(System.getProperty("user.home"), ".cache/lyrics-float/tools/appimagetool-x86_64.AppImage")
+    val iconFile = layout.projectDirectory.file("src/main/resources/icons/lyrics-float-v2.png")
+    val appVersion = project.version.toString()
+
+    doLast {
+        if (!toolFile.exists()) {
+            toolFile.parentFile.mkdirs()
+            URI("https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage")
+                .toURL().openStream().use { input -> toolFile.outputStream().use(input::copyTo) }
+            toolFile.setExecutable(true)
+        }
+
+        val directory = appDir.get().asFile
+        if (directory.exists()) check(directory.deleteRecursively()) { "Could not clear $directory" }
+        val usr = File(directory, "usr")
+        check(usr.mkdirs()) { "Could not create $usr" }
+        val copy = ProcessBuilder("cp", "-a", "${appBundle.get().asFile.absolutePath}/.", usr.absolutePath)
+            .inheritIO().start()
+        check(copy.waitFor() == 0) { "Could not copy the app bundle into $usr" }
+
+        File(directory, "AppRun").apply {
+            writeText("#!/bin/sh\nHERE=\"\$(dirname \"\$(readlink -f \"\$0\")\")\"\nexec \"\$HERE/usr/bin/lyrics-float\" \"\$@\"\n")
+            setExecutable(true)
+        }
+        File(directory, "lyrics-float.desktop").writeText(
+            "[Desktop Entry]\nType=Application\nName=Lyrics Float\nComment=Floating synced lyrics\nExec=lyrics-float\nIcon=lyrics-float\nCategories=AudioVideo;Audio;\nTerminal=false\n",
+        )
+        iconFile.asFile.copyTo(File(directory, "lyrics-float.png"), overwrite = true)
+
+        val output = outputDir.get().file("lyrics-float-$appVersion.AppImage").asFile
+        output.parentFile.mkdirs()
+        if (output.exists()) check(output.delete()) { "Could not replace $output" }
+        val packageProcess = ProcessBuilder(
+            toolFile.absolutePath,
+            "--appimage-extract-and-run",
+            "--no-appstream",
+            directory.absolutePath,
+            output.absolutePath,
+        ).apply {
+            environment()["ARCH"] = "x86_64"
+            inheritIO()
+        }.start()
+        check(packageProcess.waitFor() == 0) { "appimagetool failed" }
+        println("AppImage written to ${output.absolutePath}")
+    }
+}
+
+// Keep the build output in build/ and stage a dated copy for sharing.
+tasks.register("stageAppImage") {
+    dependsOn("packageAppImageFile")
+    val source = layout.buildDirectory.file("compose/binaries/main/appimage/lyrics-float-${project.version}.AppImage")
+    val stagedDir = layout.projectDirectory.dir("_apk")
+    doLast {
+        val artifact = source.get().asFile
+        check(artifact.isFile) { "Missing AppImage: $artifact" }
+        val timestamp = LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("dd-MMM_HH-mm", Locale.ROOT)).lowercase(Locale.ROOT)
+        val staged = stagedDir.file("${artifact.nameWithoutExtension}_$timestamp.AppImage").asFile
+        staged.parentFile.mkdirs()
+        artifact.copyTo(staged, overwrite = true)
+        staged.setExecutable(artifact.canExecute())
+        println("Staged artifact: ${staged.absolutePath}")
     }
 }

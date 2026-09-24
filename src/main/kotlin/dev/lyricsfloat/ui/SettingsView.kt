@@ -43,6 +43,7 @@ import dev.lyricsfloat.lyrics.BuildVersion
 import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.mpris.PlayerInfo
 import dev.lyricsfloat.platform.WindowAnchor
+import dev.lyricsfloat.platform.Autostart
 import kotlin.math.roundToInt
 
 private fun ThemeMode.label(): String = when (this) {
@@ -108,6 +109,8 @@ fun SettingsView(
 ) {
     val palette = LocalAppPalette.current
     val shape = RoundedCornerShape(20.dp)
+    var autostartEnabled by remember { mutableStateOf(Autostart.isEnabled()) }
+    var autostartError by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -269,6 +272,14 @@ fun SettingsView(
                 )
                 ToggleRow("Show surrounding lines", showNextLine, onShowNextLineChange, palette)
                 ToggleRow("Hide when nothing is playing", autoHide, onAutoHideChange, palette)
+                ToggleRow("Start on login", autostartEnabled, { enabled ->
+                    autostartError = !Autostart.setEnabled(enabled)
+                    autostartEnabled = Autostart.isEnabled()
+                }, palette)
+                if (autostartError) {
+                    Text("Could not set autostart. Run the installed app or AppImage.",
+                        style = TextStyle(fontSize = 11.sp), color = palette.onSurfaceDim)
+                }
 
                 Spacer(Modifier.height(10.dp))
                 SectionTitle("Screen position")
