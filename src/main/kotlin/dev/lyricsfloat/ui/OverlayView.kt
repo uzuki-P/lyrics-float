@@ -189,6 +189,7 @@ fun OverlayView(
     lyrics: LyricsState,
     loading: Boolean,
     fontSizeSp: Int,
+    romajiFontSizeSp: Int,
     opacity: Float,
     showNext: Boolean,
     offsetMs: Long,
@@ -332,6 +333,7 @@ fun OverlayView(
                             positionMs = positionMs,
                             offsetMs = offsetMs,
                             fontSizeSp = fontSizeSp,
+                            romajiFontSizeSp = romajiFontSizeSp,
                             autoScrollDefault = autoScroll,
                             showIntervalIndicator = showIntervalIndicator,
                             respectAgentPositioning = respectAgentPositioning,
@@ -368,6 +370,7 @@ private fun LyricsViewport(
     positionMs: Long,
     offsetMs: Long,
     fontSizeSp: Int,
+    romajiFontSizeSp: Int,
     autoScrollDefault: Boolean,
     showIntervalIndicator: Boolean,
     respectAgentPositioning: Boolean,
@@ -550,6 +553,7 @@ private fun LyricsViewport(
                             offsetMs = offsetMs,
                             synced = lyrics.synced,
                             fontSizeSp = fontSizeSp,
+                            romajiFontSizeSp = romajiFontSizeSp,
                             wordKaraoke = wordKaraoke,
                             romanizeJapanese = romanizeJapanese,
                             textOutline = textOutline,
@@ -610,6 +614,7 @@ private fun LyricLineItem(
     offsetMs: Long,
     synced: Boolean,
     fontSizeSp: Int,
+    romajiFontSizeSp: Int,
     wordKaraoke: Boolean,
     romanizeJapanese: Boolean,
     textOutline: Boolean,
@@ -698,12 +703,13 @@ private fun LyricLineItem(
         }
 
         if (showRomaji) {
+            val size = if (isActive) romajiFontSizeSp else (romajiFontSizeSp * 0.72).roundToInt()
             LyricText(
                 text = romanized!!,
                 style = TextStyle(
-                    fontSize = ((if (isActive) activeSize else contextSize) * 0.5).sp,
+                    fontSize = size.sp,
                     fontWeight = FontWeight.Medium,
-                    lineHeight = ((if (isActive) activeSize else contextSize) * 0.65).sp,
+                    lineHeight = (size * 1.3).sp,
                 ),
                 color = Color.White.copy(alpha = 0.75f),
                 align = align,

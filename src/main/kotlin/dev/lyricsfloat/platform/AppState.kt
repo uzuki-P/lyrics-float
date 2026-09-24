@@ -67,6 +67,11 @@ object AppState {
 
     fun saveFontSizeSp(size: Int) = writeField("overlay.fontSize", size.coerceIn(12, 48).toString())
 
+    fun loadRomajiFontSizeSp(): Int = readField("overlay.romajiFontSize")?.toIntOrNull()
+        ?.takeIf { it in 8..30 } ?: 10
+
+    fun saveRomajiFontSizeSp(size: Int) = writeField("overlay.romajiFontSize", size.coerceIn(8, 30).toString())
+
     /** Pill background opacity, 0 (fully transparent) .. 1. */
     fun loadOpacity(): Float = readField("overlay.opacity")?.toFloatOrNull()?.takeIf { it in 0f..1f } ?: 0.75f
 

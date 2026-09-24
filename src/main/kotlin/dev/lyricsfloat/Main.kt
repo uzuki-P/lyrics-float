@@ -72,6 +72,7 @@ fun main() = application {
     val palette = if (themeIsDark(themeMode, darkTheme)) DarkPalette else LightPalette
 
     var fontSizeSp by remember { mutableStateOf(AppState.loadFontSizeSp()) }
+    var romajiFontSizeSp by remember { mutableStateOf(AppState.loadRomajiFontSizeSp()) }
     var opacity by remember { mutableStateOf(AppState.loadOpacity()) }
     var showNextLine by remember { mutableStateOf(AppState.loadShowNextLine()) }
     var offsetMs by remember { mutableStateOf(AppState.loadOffsetMs()) }
@@ -231,6 +232,7 @@ fun main() = application {
                 lyrics = lyrics,
                 loading = lyricsLoading,
                 fontSizeSp = fontSizeSp,
+                romajiFontSizeSp = romajiFontSizeSp,
                 opacity = opacity,
                 showNext = showNextLine,
                 offsetMs = offsetMs,
@@ -415,6 +417,11 @@ fun main() = application {
                 onFontSizeChange = { size ->
                     fontSizeSp = size
                     AppState.saveFontSizeSp(size)
+                },
+                romajiFontSizeSp = romajiFontSizeSp,
+                onRomajiFontSizeChange = { size ->
+                    romajiFontSizeSp = size
+                    AppState.saveRomajiFontSizeSp(size)
                 },
                 opacity = opacity,
                 onOpacityChange = { value ->

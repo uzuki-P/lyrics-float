@@ -99,6 +99,7 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Romaji computed lazily per line off the UI thread into
       `romanizedTextFlow`; shown as a sub-line under the active line.
 - [x] Toggle `Romanize Japanese lyrics` (default on, like Metrolist).
+- [x] Separate persisted romaji font size control (8–30 sp, default 10 sp).
 
 ## 8. Lyrics offset options
 

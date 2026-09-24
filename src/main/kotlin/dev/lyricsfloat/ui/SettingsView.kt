@@ -74,6 +74,8 @@ fun SettingsView(
     onThemeModeChange: (ThemeMode) -> Unit,
     fontSizeSp: Int,
     onFontSizeChange: (Int) -> Unit,
+    romajiFontSizeSp: Int,
+    onRomajiFontSizeChange: (Int) -> Unit,
     opacity: Float,
     onOpacityChange: (Float) -> Unit,
     showNextLine: Boolean,
@@ -158,6 +160,14 @@ fun SettingsView(
                     valueRange = 12f..48f,
                     steps = 17,
                     onValueChange = { onFontSizeChange(it.roundToInt()) },
+                )
+                SliderRow(
+                    label = "Romaji text size",
+                    valueText = "${romajiFontSizeSp}sp",
+                    value = romajiFontSizeSp.toFloat(),
+                    valueRange = 8f..30f,
+                    steps = 21,
+                    onValueChange = { onRomajiFontSizeChange(it.roundToInt()) },
                 )
                 Row(
                     modifier = Modifier
