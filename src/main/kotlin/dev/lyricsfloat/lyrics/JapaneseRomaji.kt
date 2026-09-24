@@ -12,6 +12,33 @@ import kotlinx.coroutines.withContext
 object JapaneseRomaji {
     private val tokenizer: Tokenizer by lazy { Tokenizer() }
 
+    // Kuromoji can split compounds into tokens with readings that are valid
+    // individually but wrong together. These use common spoken readings;
+    // ambiguous poetic readings still need furigana or a song-specific override.
+    private val readingOverrides = mapOf(
+        "今日" to "キョウ",
+        "昨日" to "キノウ",
+        "明日" to "アシタ",
+        "一昨日" to "オトトイ",
+        "一昨年" to "オトトシ",
+        "今朝" to "ケサ",
+        "今夜" to "コンヤ",
+        "明後日" to "アサッテ",
+        "一人" to "ヒトリ",
+        "二人" to "フタリ",
+        "二十歳" to "ハタチ",
+        "二十日" to "ハツカ",
+        "大人" to "オトナ",
+        "時計" to "トケイ",
+        "田舎" to "イナカ",
+        "風邪" to "カゼ",
+        "土産" to "ミヤゲ",
+        "果物" to "クダモノ",
+        "部屋" to "ヘヤ",
+        "眼鏡" to "メガネ",
+        "八百屋" to "ヤオヤ",
+    )
+
     fun isJapanese(text: String): Boolean = text.any { char ->
         (char in '\u3040'..'\u309F') || // Hiragana
             (char in '\u30A0'..'\u30FF') || // Katakana
@@ -26,7 +53,10 @@ object JapaneseRomaji {
     }
 
     suspend fun romanize(text: String): String = withContext(Dispatchers.Default) {
-        val tokens = tokenizer.tokenize(text)
+        val textWithOverrides = readingOverrides.entries
+            .sortedByDescending { (phrase, _) -> phrase.length }
+            .fold(text) { current, (phrase, reading) -> current.replace(phrase, reading) }
+        val tokens = tokenizer.tokenize(textWithOverrides)
         tokens.mapIndexed { index, token ->
             val reading = token.reading?.takeIf { it.isNotEmpty() && it != "*" } ?: token.surface
             val nextReading = tokens.getOrNull(index + 1)
