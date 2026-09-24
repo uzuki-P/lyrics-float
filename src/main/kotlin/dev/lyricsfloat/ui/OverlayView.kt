@@ -67,7 +67,6 @@ import dev.lyricsfloat.lyrics.LyricsItem
 import dev.lyricsfloat.lyrics.LyricsState
 import dev.lyricsfloat.lyrics.WordTimestamp
 import dev.lyricsfloat.lyrics.currentIndexAt
-import dev.lyricsfloat.lyrics.findActiveLineIndices
 import dev.lyricsfloat.lyrics.synthesizeWords
 import dev.lyricsfloat.lyrics.withIntervalIndicators
 import dev.lyricsfloat.mpris.ActivePlayback
@@ -533,10 +532,11 @@ private fun LyricsViewport(
                     is LyricsItem.Indicator -> kotlin.math.abs(item.afterLineIndex - currentIdx.coerceAtLeast(0))
                 }
                 val dim = when {
-                    autoScrolling && distance == 0 -> 1f
-                    distance <= 1 -> 0.55f
-                    distance <= 2 -> 0.4f
-                    else -> 0.3f
+                    distance == 0 -> 1f
+                    distance == 1 -> 0.3f
+                    distance == 2 -> 0.2f
+                    distance == 3 -> 0.15f
+                    else -> 0.08f
                 }
                 // Lines dissolve over the top/bottom fade band instead of
                 // being guillotined mid-glyph at the pill edge.
@@ -554,7 +554,7 @@ private fun LyricsViewport(
                         is LyricsItem.Line -> LyricLineItem(
                             entry = item.entry,
                             isActive = item.index == currentIdx && gap == null,
-                            singing = item.index in entries.findActiveLineIndices(positionMs, offsetMs),
+                            activeColor = palette.accent,
                             positionMs = positionMs,
                             offsetMs = offsetMs,
                             synced = lyrics.synced,
@@ -615,7 +615,7 @@ private fun LyricsViewport(
 private fun LyricLineItem(
     entry: LyricsEntry,
     isActive: Boolean,
-    singing: Boolean,
+    activeColor: Color,
     positionMs: Long,
     offsetMs: Long,
     synced: Boolean,
@@ -637,8 +637,8 @@ private fun LyricLineItem(
     Column(modifier = Modifier.alpha(alpha)) {
         if (isActive) {
             val effPosSec = (positionMs + offsetMs) / 1000.0
-            val bright = Color.White
-            val dimWord = Color.White.copy(alpha = 0.4f)
+            val bright = activeColor
+            val dimWord = activeColor.copy(alpha = 0.32f)
 
             val words = when {
                 !wordKaraoke || !synced -> null
@@ -659,7 +659,7 @@ private fun LyricLineItem(
                 LyricText(
                     text = entry.text.ifBlank { "♪" },
                     style = textStyle,
-                    color = if (singing || entry.text.isBlank()) bright else dimWord,
+                    color = bright,
                     align = align,
                     maxLines = Int.MAX_VALUE,
                     outline = textOutline,
