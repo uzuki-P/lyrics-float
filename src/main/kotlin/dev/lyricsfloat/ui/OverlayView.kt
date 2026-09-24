@@ -106,7 +106,8 @@ private fun LyricText(
                 color = OUTLINE_COLOR,
                 textAlign = align,
                 maxLines = maxLines,
-                overflow = TextOverflow.Ellipsis,
+                softWrap = true,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
@@ -115,7 +116,8 @@ private fun LyricText(
                 color = color,
                 textAlign = align,
                 maxLines = maxLines,
-                overflow = TextOverflow.Ellipsis,
+                softWrap = true,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -126,7 +128,8 @@ private fun LyricText(
             color = color,
             textAlign = align,
             maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis,
+            softWrap = true,
+            overflow = TextOverflow.Clip,
             modifier = modifier.fillMaxWidth(),
         )
     }
@@ -150,16 +153,18 @@ private fun LyricKaraokeText(
                 style = style.copy(drawStyle = Stroke(width = outlinePx, join = StrokeJoin.Round)),
                 color = OUTLINE_COLOR,
                 textAlign = align,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = Int.MAX_VALUE,
+                softWrap = true,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 text = annotated,
                 style = style,
                 textAlign = align,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = Int.MAX_VALUE,
+                softWrap = true,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -168,8 +173,9 @@ private fun LyricKaraokeText(
             text = annotated,
             style = style.copy(shadow = TEXT_SHADOW),
             textAlign = align,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = Int.MAX_VALUE,
+            softWrap = true,
+            overflow = TextOverflow.Clip,
             modifier = modifier.fillMaxWidth(),
         )
     }
@@ -655,7 +661,7 @@ private fun LyricLineItem(
                     style = textStyle,
                     color = if (singing || entry.text.isBlank()) bright else dimWord,
                     align = align,
-                    maxLines = 2,
+                    maxLines = Int.MAX_VALUE,
                     outline = textOutline,
                     outlinePx = outlinePx,
                 )
@@ -696,7 +702,7 @@ private fun LyricLineItem(
                 ),
                 color = Color.White,
                 align = align,
-                maxLines = 2,
+                maxLines = Int.MAX_VALUE,
                 outline = textOutline,
                 outlinePx = outlinePx * 0.8f,
             )
@@ -713,7 +719,7 @@ private fun LyricLineItem(
                 ),
                 color = Color.White.copy(alpha = 0.75f),
                 align = align,
-                maxLines = 1,
+                maxLines = Int.MAX_VALUE,
                 outline = textOutline,
                 outlinePx = outlinePx * 0.6f,
             )

@@ -98,4 +98,7 @@ draggable) input target. Drag it somewhere out of the way.
 
 ## License
 
-[MIT](LICENSE)
+Lyrics Float is licensed under [GNU GPL-3.0-only](LICENSE). Lyrics code adapted
+from Metrolist was modified for this project in 2026. See
+[third-party notices](THIRD_PARTY_NOTICES.md) for the licenses and attribution
+for adapted code.
