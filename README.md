@@ -6,8 +6,12 @@ speaks [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/)
 session bus, fetches timed lyrics from [LRCLIB](https://lrclib.net), and shows
 the current line in a small always-on-top pill you can park anywhere on screen.
 
-Built with Kotlin and Compose Multiplatform for desktop. Lyrics lookup and LRC
-parsing are ported from [Metrolist](https://github.com/MetrolistProject/Metrolist).
+Built with Kotlin and Compose Multiplatform for desktop. The lyrics feature
+set (providers, extended-LRC parsing, word karaoke, agent positioning,
+interval indicator, romaji) is ported from
+[Metrolist](https://github.com/MetrolistProject/Metrolist) — a local reference
+clone lives at `~/projects/_sandbox/_github/Metrolist`. The native window-drag
+technique is adapted from pray-time (`~/projects/_sandbox/pray-time`).
 
 ![Linux](https://img.shields.io/badge/platform-Linux/Wayland-blue)
 
@@ -16,13 +20,20 @@ parsing are ported from [Metrolist](https://github.com/MetrolistProject/Metrolis
 - Now-playing detection over MPRIS, with the same player-selection heuristic
   KDE Plasma's media widget uses. Works with YouTube Music in Firefox and
   Chromium; any MPRIS player works.
-- Synced (karaoke-line) lyrics from LRCLIB, with plain-lyrics fallback. The
-  playback position is interpolated locally, so the highlight stays smooth
-  without hammering D-Bus.
-- Manual lyrics search: find any song on LRCLIB and pin it to the track that
-  is currently playing. Picks persist per track.
-- Floating overlay: transparent, always-on-top, draggable, hover controls,
-  next-line preview, progress bar, adjustable text size and opacity.
+- Multiple lyrics providers tried in order: BetterLyrics, Lrclib, KuGou,
+  Paxsenix (Apple Music) and LyricsPlus — each toggleable in settings.
+  Extended-LRC word timings, duet agent markers and background vocals are
+  understood everywhere.
+- Metrolist-style lyrics rendering: karaoke word-by-word fill, sliding line
+  transitions, interval indicator dots during instrumental gaps, agent
+  positioning (v1 left / v2 right), and offline romaji for Japanese lyrics.
+  The playback position is interpolated locally, so the highlight stays
+  smooth without hammering D-Bus.
+- Manual lyrics search (1 s debounce) with per-track picks that persist.
+  Sync offset fine-tuning (±50 ms steps, −3..+3 s slider).
+- Floating overlay: transparent, always-on-top, native WM drag and
+  edge/corner resize, hover controls, progress bar, adjustable text size and
+  opacity. Context lines scale with the window size.
 - Settings: theme (system/light/dark), sync offset, screen anchor,
   preferred player, auto-hide.
 - System tray via StatusNotifierItem with show/hide, search, settings and quit.

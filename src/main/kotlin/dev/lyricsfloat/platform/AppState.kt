@@ -43,14 +43,34 @@ object AppState {
 
     fun saveOverlayAnchor(anchor: WindowAnchor) = writeField("overlay.anchor", anchor.name)
 
+    // Overlay size, in dp. Resizable since the Metrolist feature port; the
+    // historical fixed 560x170 dp pill is the default.
+    const val DEFAULT_WIDTH_DP = 560f
+    const val DEFAULT_HEIGHT_DP = 170f
+    const val MIN_WIDTH_DP = 380f
+    const val MIN_HEIGHT_DP = 120f
+    const val MAX_WIDTH_DP = 1600f
+    const val MAX_HEIGHT_DP = 1200f
+
+    fun loadOverlayWidthDp(): Float = readField("overlay.width")?.toFloatOrNull()
+        ?.takeIf { it in MIN_WIDTH_DP..MAX_WIDTH_DP } ?: DEFAULT_WIDTH_DP
+
+    fun loadOverlayHeightDp(): Float = readField("overlay.height")?.toFloatOrNull()
+        ?.takeIf { it in MIN_HEIGHT_DP..MAX_HEIGHT_DP } ?: DEFAULT_HEIGHT_DP
+
+    fun saveOverlaySize(widthDp: Float, heightDp: Float) {
+        writeField("overlay.width", widthDp.coerceIn(MIN_WIDTH_DP, MAX_WIDTH_DP).toString())
+        writeField("overlay.height", heightDp.coerceIn(MIN_HEIGHT_DP, MAX_HEIGHT_DP).toString())
+    }
+
     fun loadFontSizeSp(): Int = readField("overlay.fontSize")?.toIntOrNull()?.takeIf { it in 12..48 } ?: 20
 
     fun saveFontSizeSp(size: Int) = writeField("overlay.fontSize", size.coerceIn(12, 48).toString())
 
-    /** Pill background opacity, 0.3..0.95. */
-    fun loadOpacity(): Float = readField("overlay.opacity")?.toFloatOrNull()?.takeIf { it in 0.3f..0.95f } ?: 0.75f
+    /** Pill background opacity, 0 (fully transparent) .. 1. */
+    fun loadOpacity(): Float = readField("overlay.opacity")?.toFloatOrNull()?.takeIf { it in 0f..1f } ?: 0.75f
 
-    fun saveOpacity(opacity: Float) = writeField("overlay.opacity", opacity.coerceIn(0.3f, 0.95f).toString())
+    fun saveOpacity(opacity: Float) = writeField("overlay.opacity", opacity.coerceIn(0f, 1f).toString())
 
     fun loadShowNextLine(): Boolean = readField("overlay.showNext") != "false"
 
@@ -60,6 +80,40 @@ object AppState {
     fun loadOffsetMs(): Long = readField("lyrics.offsetMs")?.toLongOrNull()?.takeIf { it in -10_000..10_000 } ?: 0L
 
     fun saveOffsetMs(offset: Long) = writeField("lyrics.offsetMs", offset.coerceIn(-10_000, 10_000).toString())
+
+    // ----- lyrics rendering (Metrolist behavior toggles) -----
+
+    fun loadShowIntervalIndicator(): Boolean = readField("lyrics.intervalIndicator") != "false"
+
+    fun saveShowIntervalIndicator(value: Boolean) = writeField("lyrics.intervalIndicator", value.toString())
+
+    fun loadRespectAgentPositioning(): Boolean = readField("lyrics.agentPositioning") != "false"
+
+    fun saveRespectAgentPositioning(value: Boolean) = writeField("lyrics.agentPositioning", value.toString())
+
+    fun loadWordKaraoke(): Boolean = readField("lyrics.wordKaraoke") != "false"
+
+    fun saveWordKaraoke(value: Boolean) = writeField("lyrics.wordKaraoke", value.toString())
+
+    fun loadRomanizeJapanese(): Boolean = readField("lyrics.romanizeJapanese") != "false"
+
+    fun saveRomanizeJapanese(value: Boolean) = writeField("lyrics.romanizeJapanese", value.toString())
+
+    /** Default line alignment: LEFT, CENTER or RIGHT (Metrolist LyricsTextPositionKey). */
+    fun loadTextPosition(): String = readField("lyrics.textPosition")?.takeIf { it in setOf("LEFT", "CENTER", "RIGHT") }
+        ?: "CENTER"
+
+    fun saveTextPosition(value: String) = writeField("lyrics.textPosition", value)
+
+    /** Metrolist LyricsScrollKey: follow the playback position automatically. */
+    fun loadAutoScroll(): Boolean = readField("lyrics.autoScroll") != "false"
+
+    fun saveAutoScroll(value: Boolean) = writeField("lyrics.autoScroll", value.toString())
+
+    /** Outline stroke around lyric text instead of a drop shadow. */
+    fun loadTextOutline(): Boolean = readField("lyrics.textOutline") != "false"
+
+    fun saveTextOutline(value: Boolean) = writeField("lyrics.textOutline", value.toString())
 
     // ----- behavior -----
 

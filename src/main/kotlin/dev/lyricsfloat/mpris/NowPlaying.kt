@@ -12,7 +12,7 @@ data class TrackInfo(
     /** Track duration in milliseconds, or null when the player does not report it. */
     val lengthMs: Long?,
 ) {
-    val hasContent: Boolean get() = title.isNotBlank() && artist.isNotBlank()
+    val hasContent: Boolean get() = title.isNotBlank()
 }
 
 /** A player visible on the session bus. */

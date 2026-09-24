@@ -10,10 +10,17 @@ dev:
 test:
     ./gradlew test
 
-# Build a native package for the current operating system.
+# Build the AppImage app bundle (dpkg-free; packageDeb needs dpkg-deb, which
+# Fedora does not ship).
 build:
-    ./gradlew packageDistributionForCurrentOS
+    ./gradlew packageAppImage
 
-# Build the Linux AppImage package.
+# Build the distributable AppImage file into _apk/.
 build-appimage:
     ./gradlew packageAppImageFile
+
+# Run the packaged app. LD_LIBRARY_PATH is scrubbed because terminals spawned
+# from AppImage-hosted editors (e.g. T3 Code) inject their mount's lib dir,
+# which makes the Compose native launcher segfault in setenv at JVM startup.
+run-package:
+    env -u LD_LIBRARY_PATH ./build/compose/binaries/main/app/lyrics-float/bin/lyrics-float

@@ -31,6 +31,14 @@ dependencies {
     // Provides Dispatchers.Main (EDT) on desktop.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
 
+    // JNA talks to Xlib so the WM can run undecorated-window drags natively
+    // (_NET_WM_MOVERESIZE); setLocation dragging jitters under XWayland.
+    implementation("net.java.dev.jna:jna:5.17.0")
+    implementation("net.java.dev.jna:jna-platform:5.17.0")
+
+    // Offline Japanese tokenization for romaji lyrics.
+    implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
+
     testImplementation(kotlin("test"))
 }
 
@@ -53,7 +61,7 @@ compose.desktop {
             copyright = "Copyright © 2026 Uzuki-P"
 
             linux {
-                iconFile.set(project.file("src/main/resources/icons/lyrics-float.png"))
+                iconFile.set(project.file("src/main/resources/icons/lyrics-float-v2.png"))
             }
         }
     }

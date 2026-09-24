@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package dev.lyricsfloat.ui
 
 import androidx.compose.foundation.background
@@ -5,9 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,10 +35,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.lyricsfloat.lyrics.BuildVersion
+import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.mpris.PlayerInfo
 import dev.lyricsfloat.platform.WindowAnchor
 import kotlin.math.roundToInt
@@ -58,14 +62,11 @@ private fun WindowAnchor.label(): String = when (this) {
     WindowAnchor.BOTTOM_RIGHT -> "Bottom right"
 }
 
-private data class FontSizeOption(val label: String, val sp: Int)
-
-private val fontSizeOptions = listOf(
-    FontSizeOption("Small", 16),
-    FontSizeOption("Medium", 20),
-    FontSizeOption("Large", 26),
-)
-
+/**
+ * Settings dialog, structured after Metrolist's lyrics settings: a Lyrics
+ * section first (text size, text position, scroll and animation behavior,
+ * romanization), then providers, then the overlay/appearance knobs.
+ */
 @Composable
 fun SettingsView(
     themeMode: ThemeMode,
@@ -86,6 +87,22 @@ fun SettingsView(
     onPreferredPlayerChange: (String?) -> Unit,
     players: List<PlayerInfo>,
     onResetOverlayPosition: () -> Unit,
+    showIntervalIndicator: Boolean,
+    onShowIntervalIndicatorChange: (Boolean) -> Unit,
+    respectAgentPositioning: Boolean,
+    onRespectAgentPositioningChange: (Boolean) -> Unit,
+    wordKaraoke: Boolean,
+    onWordKaraokeChange: (Boolean) -> Unit,
+    romanizeJapanese: Boolean,
+    onRomanizeJapaneseChange: (Boolean) -> Unit,
+    textPosition: LyricsTextPosition,
+    onTextPositionChange: (LyricsTextPosition) -> Unit,
+    autoScroll: Boolean,
+    onAutoScrollChange: (Boolean) -> Unit,
+    textOutline: Boolean,
+    onTextOutlineChange: (Boolean) -> Unit,
+    enabledProviders: Set<String>,
+    onProviderEnabledChange: (String, Boolean) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -102,7 +119,7 @@ fun SettingsView(
                 .fillMaxSize()
                 .clip(shape)
                 .background(palette.surface)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -122,54 +139,151 @@ fun SettingsView(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
             ) {
-                SectionTitle("Overlay")
-                OptionRow("Show next line") {
-                    Switch(
-                        checked = showNextLine,
-                        onCheckedChange = onShowNextLineChange,
-                        colors = switchColors(palette),
-                        modifier = Modifier.scale(0.85f),
-                    )
-                }
-                OptionRow("Hide when nothing is playing") {
-                    Switch(
-                        checked = autoHide,
-                        onCheckedChange = onAutoHideChange,
-                        colors = switchColors(palette),
-                        modifier = Modifier.scale(0.85f),
-                    )
-                }
-
+                // ----- Lyrics (Metrolist's lyrics settings) -----
+                SectionTitle("Lyrics")
                 SliderRow(
                     label = "Text size",
                     valueText = "${fontSizeSp}sp",
                     value = fontSizeSp.toFloat(),
-                    valueRange = 14f..40f,
-                    steps = 12,
-                    onValueChange = { onFontSizeChange(it.toInt()) },
+                    valueRange = 12f..48f,
+                    steps = 17,
+                    onValueChange = { onFontSizeChange(it.roundToInt()) },
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Text position",
+                        style = TextStyle(fontSize = 13.sp),
+                        color = palette.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ChipRow(
+                        options = listOf("Left", "Center", "Right"),
+                        selectedLabels = listOf(
+                            LyricsTextPosition.LEFT,
+                            LyricsTextPosition.CENTER,
+                            LyricsTextPosition.RIGHT,
+                        ).map { it == textPosition },
+                        onSelect = { index ->
+                            onTextPositionChange(
+                                listOf(
+                                    LyricsTextPosition.LEFT,
+                                    LyricsTextPosition.CENTER,
+                                    LyricsTextPosition.RIGHT,
+                                )[index],
+                            )
+                        },
+                    )
+                }
+                ToggleRow("Auto scroll", autoScroll, onAutoScrollChange, palette)
+                ToggleRow("Text outline", textOutline, onTextOutlineChange, palette)
+                ToggleRow("Karaoke word highlight", wordKaraoke, onWordKaraokeChange, palette)
+                ToggleRow("Show interval indicator", showIntervalIndicator, onShowIntervalIndicatorChange, palette)
+                ToggleRow("Respect agent positioning", respectAgentPositioning, onRespectAgentPositioningChange, palette)
+                ToggleRow("Romanize Japanese lyrics", romanizeJapanese, onRomanizeJapaneseChange, palette)
+
+                Spacer(Modifier.height(10.dp))
+                SectionTitle("Lyrics sync")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Offset",
+                        style = TextStyle(fontSize = 13.sp),
+                        color = palette.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StepperButton("−") { onOffsetChange(offsetMs - 50) }
+                    Text(
+                        text = "%+dms".format(offsetMs),
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        color = palette.onSurface,
+                        modifier = Modifier.width(72.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                    StepperButton("+") { onOffsetChange(offsetMs + 50) }
+                }
+                SliderRow(
+                    label = "Fine tune",
+                    valueText = "%+dms".format(offsetMs),
+                    value = offsetMs.toFloat().coerceIn(-3000f, 3000f),
+                    valueRange = -3000f..3000f,
+                    steps = 59,
+                    onValueChange = { onOffsetChange((it / 100).toLong() * 100) },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    Text(
+                        "Reset offset",
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        color = palette.accent,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onOffsetChange(0) }
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                SectionTitle("Lyrics providers")
+                LyricsProviders.names.forEach { name ->
+                    ToggleRow(name, name in enabledProviders, { onProviderEnabledChange(name, it) }, palette)
+                }
+                Text(
+                    "Tried top to bottom until one returns lyrics.",
+                    style = TextStyle(fontSize = 11.sp),
+                    color = palette.onSurfaceDim,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+
+                Spacer(Modifier.height(10.dp))
+                SectionTitle("Overlay")
                 SliderRow(
                     label = "Background opacity",
                     valueText = "${(opacity * 100).roundToInt()}%",
                     value = opacity,
-                    valueRange = 0.3f..0.95f,
+                    valueRange = 0f..1f,
                     steps = 0,
                     onValueChange = onOpacityChange,
                 )
-                Spacer(Modifier.height(12.dp))
-                SectionTitle("Screen position")
-                ChipRow(
-                    options = WindowAnchor.entries.map { it.label() },
-                    selectedIndex = WindowAnchor.entries.indexOf(anchor),
-                    onSelect = { onAnchorChange(WindowAnchor.entries[it]) },
+                Text(
+                    "0% keeps only the text, readable through its shadow.",
+                    style = TextStyle(fontSize = 11.sp),
+                    color = palette.onSurfaceDim,
                 )
+                ToggleRow("Show surrounding lines", showNextLine, onShowNextLineChange, palette)
+                ToggleRow("Hide when nothing is playing", autoHide, onAutoHideChange, palette)
+
+                Spacer(Modifier.height(10.dp))
+                SectionTitle("Screen position")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    WindowAnchor.entries.forEach { option ->
+                        ChipRow(
+                            options = listOf(option.label()),
+                            selectedLabels = listOf(anchor == option),
+                            onSelect = { onAnchorChange(option) },
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -187,45 +301,15 @@ fun SettingsView(
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
-                SectionTitle("Lyrics sync")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Offset",
-                        style = TextStyle(fontSize = 13.sp),
-                        color = palette.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StepperButton("−") { onOffsetChange(offsetMs - 100) }
-                    Text(
-                        text = "${offsetMs}ms",
-                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                        color = palette.onSurface,
-                        modifier = Modifier.width(64.dp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    StepperButton("+") { onOffsetChange(offsetMs + 100) }
-                }
-                Text(
-                    "Positive values show lines earlier.",
-                    style = TextStyle(fontSize = 11.sp),
-                    color = palette.onSurfaceDim,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 SectionTitle("Appearance")
                 ChipRow(
                     options = ThemeMode.entries.map { it.label() },
-                    selectedIndex = ThemeMode.entries.indexOf(themeMode),
+                    selectedLabels = ThemeMode.entries.map { it == themeMode },
                     onSelect = { onThemeModeChange(ThemeMode.entries[it]) },
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 SectionTitle("Song source")
                 RadioRow(
                     label = "Auto (follows the playing song)",
@@ -248,12 +332,13 @@ fun SettingsView(
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
                 Text(
-                    "Lyrics Float ${BuildVersion.VERSION} · lyrics from lrclib.net",
+                    "Lyrics Float ${BuildVersion.VERSION} · lyrics via BetterLyrics, Lrclib, KuGou, Paxsenix, LyricsPlus",
                     style = TextStyle(fontSize = 11.sp),
                     color = palette.onSurfaceDim,
                 )
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
@@ -265,8 +350,8 @@ private fun SectionTitle(text: String) {
     Text(
         text,
         style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-        color = palette.onSurfaceDim,
-        modifier = Modifier.padding(bottom = 6.dp),
+        color = palette.accent.copy(alpha = 0.85f),
+        modifier = Modifier.padding(bottom = 6.dp, top = 2.dp),
     )
 }
 
@@ -280,12 +365,16 @@ private fun switchColors(palette: AppPalette) = SwitchDefaults.colors(
 )
 
 @Composable
-private fun OptionRow(label: String, trailing: @Composable () -> Unit) {
-    val palette = LocalAppPalette.current
+private fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    palette: AppPalette,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -294,7 +383,12 @@ private fun OptionRow(label: String, trailing: @Composable () -> Unit) {
             color = palette.onSurface,
             modifier = Modifier.weight(1f),
         )
-        trailing()
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = switchColors(palette),
+            modifier = Modifier.scale(0.8f),
+        )
     }
 }
 
@@ -337,12 +431,12 @@ private fun SliderRow(
 }
 
 @Composable
-private fun ChipRow(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+private fun ChipRow(options: List<String>, selectedLabels: List<Boolean>, onSelect: (Int) -> Unit) {
     val palette = LocalAppPalette.current
     val shape = RoundedCornerShape(10.dp)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEachIndexed { index, option ->
-            val selected = index == selectedIndex
+            val selected = selectedLabels[index]
             Box(
                 modifier = Modifier
                     .clip(shape)
@@ -404,4 +498,3 @@ private fun StepperButton(symbol: String, onClick: () -> Unit) {
             .padding(horizontal = 10.dp, vertical = 2.dp),
     )
 }
-
