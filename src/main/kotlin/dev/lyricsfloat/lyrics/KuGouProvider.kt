@@ -182,6 +182,7 @@ object KuGouProvider : LyricsProvider {
                 artist = song.singername.orEmpty(),
                 durationMs = if (song.duration > 0) song.duration * 1000 else null,
                 synced = true,
+                timing = LyricsTiming.LINE,
             ) {
                 val candidate = song.hash?.let { searchLyrics(mapOf("hash" to it)).candidates.firstOrNull() }
                 if (candidate == null) {

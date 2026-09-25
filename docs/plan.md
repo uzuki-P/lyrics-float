@@ -77,6 +77,15 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 
 - [x] Manual search runs when the Search button or Enter is pressed, without a debounce.
 - [x] Manual picks use the current MPRIS track even when the repository has not set its target key yet.
+- [x] Applying a search result uses that exact row's lyrics, keeps the old
+      lyrics if loading fails, and stores successful picks for restart.
+- [x] Older KuGou picks without saved text retry their matching search row
+      once and pin the result when it loads.
+- [x] Disk cache reuse tolerates missing artist metadata and a close duration
+      match when the title identifies one entry.
+- [x] Search results show word, line, or plain timing when known and load an
+      expandable lyrics preview on demand. Search and settings dialogs have
+      resize handles.
 
 ## 6. Lyrics animation (Metrolist-style)
 
@@ -295,6 +304,21 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
       window has no XID to shape).
 - [x] Toggle reachable from three places: the settings Overlay section
       (persisted as `behavior.clickPassThrough`), the pill's hover header,
-      and the tray right-click menu as a dbusmenu checkmark item whose state
+      and the tray right-click menu with an on/off pointer icon whose state
       is re-read on every open (root AboutToShow bumps the revision or Qt's
       importer drops the refresh).
+
+## 22. Tray menu polish
+
+- [x] Use a consistent set of app-drawn icons in the Plasma right-click menu,
+      show the app mark in a header, and label the visibility action according
+      to whether the lyrics overlay is currently shown.
+- [x] Draw a stateful pass-through icon in the menu instead of Plasma's
+      checkmark, which replaces action icons on checkable rows.
+
+## 23. Hover menu position and dialog resize
+
+- [x] Add a saved Top/Bottom setting for the lyrics hover menu and move the
+      click pass-through input strip with it.
+- [x] Resize the settings and search windows from every edge and corner with
+      invisible targets and matching resize cursors, like the lyrics overlay.

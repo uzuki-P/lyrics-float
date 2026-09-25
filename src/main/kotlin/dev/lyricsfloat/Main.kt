@@ -3,6 +3,8 @@
 package dev.lyricsfloat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -15,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
@@ -38,6 +41,8 @@ import dev.lyricsfloat.platform.LinuxWindowMover
 import dev.lyricsfloat.platform.WindowAnchor
 import dev.lyricsfloat.platform.anchorPosition
 import dev.lyricsfloat.ui.DarkPalette
+import dev.lyricsfloat.ui.DialogResizeZones
+import dev.lyricsfloat.ui.HoverMenuPosition
 import dev.lyricsfloat.ui.LightPalette
 import dev.lyricsfloat.ui.LocalAppPalette
 import dev.lyricsfloat.ui.LyricsTextPosition
@@ -79,6 +84,7 @@ fun main() = application {
     var offsetMs by remember { mutableStateOf(AppState.loadOffsetMs()) }
     var autoHide by remember { mutableStateOf(AppState.loadAutoHide()) }
     var clickPassThrough by remember { mutableStateOf(AppState.loadClickPassThrough()) }
+    var hoverMenuPosition by remember { mutableStateOf(AppState.loadHoverMenuPosition()) }
     var preferredPlayer by remember { mutableStateOf(AppState.loadPreferredPlayer()) }
     var overlayAnchor by remember { mutableStateOf(AppState.loadOverlayAnchor()) }
     var showIntervalIndicator by remember { mutableStateOf(AppState.loadShowIntervalIndicator()) }
@@ -128,6 +134,7 @@ fun main() = application {
             onSettings = { settingsVisible = true },
             onToggleClickPassThrough = toggleClickPassThrough,
             clickPassThroughEnabled = { clickPassThrough },
+            overlayVisible = { overlayVisible },
             onQuit = quit,
         )
         tray.start()
@@ -173,15 +180,16 @@ fun main() = application {
             onDispose { window.minimumSize = Dimension(0, 0) }
         }
 
-        // Click pass-through: strip the X input region down to the top hover
+        // Click pass-through: strip the X input region down to the hover menu
         // strip so XWayland hands every other click to the windows below.
         // Keyed on overlayShown because a hidden window has no XID to shape
         // yet. Re-applied on resize since the strip rectangle is measured in
         // window pixels.
-        val passThroughStripPx = with(density) { 40.dp.roundToPx() }
-        DisposableEffect(clickPassThrough, overlayShown) {
+        val passThroughStripPx = with(density) { 48.dp.roundToPx() }
+        DisposableEffect(clickPassThrough, overlayShown, hoverMenuPosition) {
             fun applyShape() {
-                LinuxClickThrough.apply(window, clickPassThrough, passThroughStripPx)
+                LinuxClickThrough.apply(window, clickPassThrough, passThroughStripPx,
+                    hoverMenuPosition == HoverMenuPosition.BOTTOM)
             }
             applyShape()
             val listener = object : ComponentAdapter() {
@@ -276,6 +284,7 @@ fun main() = application {
                 textOutline = textOutline,
                 autoScroll = autoScroll,
                 clickPassThrough = clickPassThrough,
+                hoverMenuPosition = hoverMenuPosition,
                 onSearch = { searchVisible = true },
                 onSettings = { settingsVisible = true },
                 onToggleClickPassThrough = toggleClickPassThrough,
@@ -361,7 +370,7 @@ fun main() = application {
         icon = null,
         decoration = WindowDecoration.Undecorated(0.dp),
         transparent = true,
-        resizable = false,
+        resizable = true,
         enabled = true,
         focusable = true,
         alwaysOnTop = true,
@@ -375,6 +384,10 @@ fun main() = application {
     ) {
         TransparentWindowBackground(window)
         val density = LocalDensity.current
+        DisposableEffect(window, density) {
+            window.minimumSize = Dimension(with(density) { 340.dp.roundToPx() }, with(density) { 320.dp.roundToPx() })
+            onDispose { window.minimumSize = Dimension(0, 0) }
+        }
         LaunchedEffect(Unit) {
             val bounds = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
                 .defaultScreenDevice.defaultConfiguration.bounds
@@ -388,25 +401,28 @@ fun main() = application {
             }
         }
         CompositionLocalProvider(LocalAppPalette provides palette) {
-            SearchView(
-                targetTitle = playback?.track?.title.orEmpty(),
-                targetArtist = playback?.track?.artist.orEmpty(),
-                hasTarget = playback?.track?.hasContent == true,
-                overrideApplied = repository.hasOverride(),
-                initialQuery = playback?.track?.let { track ->
-                    listOfNotNull(
-                        LrcLib.cleanTitle(track.title).takeIf(String::isNotBlank),
-                        LrcLib.cleanArtist(track.artist).takeIf(String::isNotBlank),
-                    ).joinToString(" ")
-                }.orEmpty(),
-                onPick = { result -> repository.applyManualPick(result, monitor.active.value?.track) },
-                onApplyManualText = { text -> repository.applyManualText(text, monitor.active.value?.track) },
-                currentLyricsText = { repository.currentRawLyrics() },
-                onSearchWeb = ::openLyricsWebSearch,
-                onClearOverride = repository::clearOverride,
-                onClose = { searchVisible = false },
-                search = { query, provider -> repository.search(query, provider) },
-            )
+            Box(Modifier.fillMaxSize()) {
+                SearchView(
+                    targetTitle = playback?.track?.title.orEmpty(),
+                    targetArtist = playback?.track?.artist.orEmpty(),
+                    hasTarget = playback?.track?.hasContent == true,
+                    overrideApplied = repository.hasOverride(),
+                    initialQuery = playback?.track?.let { track ->
+                        listOfNotNull(
+                            LrcLib.cleanTitle(track.title).takeIf(String::isNotBlank),
+                            LrcLib.cleanArtist(track.artist).takeIf(String::isNotBlank),
+                        ).joinToString(" ")
+                    }.orEmpty(),
+                    onPick = { result -> repository.applyManualPick(result, monitor.active.value?.track) },
+                    onApplyManualText = { text -> repository.applyManualText(text, monitor.active.value?.track) },
+                    currentLyricsText = { repository.currentRawLyrics() },
+                    onSearchWeb = ::openLyricsWebSearch,
+                    onClearOverride = repository::clearOverride,
+                    onClose = { searchVisible = false },
+                    search = { query, provider -> repository.search(query, provider) },
+                )
+                DialogResizeZones(window)
+            }
         }
     }
 
@@ -420,7 +436,7 @@ fun main() = application {
         icon = null,
         decoration = WindowDecoration.Undecorated(0.dp),
         transparent = true,
-        resizable = false,
+        resizable = true,
         enabled = true,
         focusable = true,
         alwaysOnTop = true,
@@ -433,6 +449,10 @@ fun main() = application {
     ) {
         TransparentWindowBackground(window)
         val density = LocalDensity.current
+        DisposableEffect(window, density) {
+            window.minimumSize = Dimension(with(density) { 320.dp.roundToPx() }, with(density) { 320.dp.roundToPx() })
+            onDispose { window.minimumSize = Dimension(0, 0) }
+        }
         LaunchedEffect(Unit) {
             val bounds = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
                 .defaultScreenDevice.defaultConfiguration.bounds
@@ -444,106 +464,114 @@ fun main() = application {
             }
         }
         CompositionLocalProvider(LocalAppPalette provides palette) {
-            SettingsView(
-                themeMode = themeMode,
-                onThemeModeChange = { mode ->
-                    themeMode = mode
-                    AppState.saveThemeMode(mode)
-                },
-                fontSizeSp = fontSizeSp,
-                onFontSizeChange = { size ->
-                    fontSizeSp = size
-                    AppState.saveFontSizeSp(size)
-                },
-                romajiFontSizeSp = romajiFontSizeSp,
-                onRomajiFontSizeChange = { size ->
-                    romajiFontSizeSp = size
-                    AppState.saveRomajiFontSizeSp(size)
-                },
-                opacity = opacity,
-                onOpacityChange = { value ->
-                    opacity = value
-                    AppState.saveOpacity(value)
-                },
-                showNextLine = showNextLine,
-                onShowNextLineChange = { value ->
-                    showNextLine = value
-                    AppState.saveShowNextLine(value)
-                },
-                offsetMs = offsetMs,
-                onOffsetChange = { value ->
-                    offsetMs = value
-                    AppState.saveOffsetMs(value)
-                },
-                autoHide = autoHide,
-                onAutoHideChange = { value ->
-                    autoHide = value
-                    AppState.saveAutoHide(value)
-                },
-                clickPassThrough = clickPassThrough,
-                onClickPassThroughChange = { value ->
-                    clickPassThrough = value
-                    AppState.saveClickPassThrough(value)
-                },
-                anchor = overlayAnchor,
-                onAnchorChange = { anchor ->
-                    overlayAnchor = anchor
-                    AppState.saveOverlayAnchor(anchor)
-                    customPosition = null
-                },
-                preferredPlayer = preferredPlayer,
-                onPreferredPlayerChange = { identity ->
-                    preferredPlayer = identity
-                    AppState.savePreferredPlayer(identity)
-                },
-                players = players,
-                onResetOverlayPosition = {
-                    customPosition = null
-                },
-                showIntervalIndicator = showIntervalIndicator,
-                onShowIntervalIndicatorChange = { value ->
-                    showIntervalIndicator = value
-                    AppState.saveShowIntervalIndicator(value)
-                },
-                respectAgentPositioning = respectAgentPositioning,
-                onRespectAgentPositioningChange = { value ->
-                    respectAgentPositioning = value
-                    AppState.saveRespectAgentPositioning(value)
-                },
-                wordKaraoke = wordKaraoke,
-                onWordKaraokeChange = { value ->
-                    wordKaraoke = value
-                    AppState.saveWordKaraoke(value)
-                },
-                romanizeJapanese = romanizeJapanese,
-                onRomanizeJapaneseChange = { value ->
-                    romanizeJapanese = value
-                    repository.setRomanizeJapanese(value)
-                },
-                textPosition = textPosition,
-                onTextPositionChange = { value ->
-                    textPosition = value
-                    AppState.saveTextPosition(value.name)
-                },
-                autoScroll = autoScroll,
-                onAutoScrollChange = { value ->
-                    autoScroll = value
-                    AppState.saveAutoScroll(value)
-                },
-                textOutline = textOutline,
-                onTextOutlineChange = { value ->
-                    textOutline = value
-                    AppState.saveTextOutline(value)
-                },
-                enabledProviders = enabledProviders,
-                onProviderEnabledChange = { name, enabled ->
-                    val next = enabledProviders.toMutableSet()
-                    if (enabled) next.add(name) else next.remove(name)
-                    enabledProviders = next
-                    LyricsProviders.setEnabled(next)
-                },
-                onClose = { settingsVisible = false },
-            )
+            Box(Modifier.fillMaxSize()) {
+                SettingsView(
+                    themeMode = themeMode,
+                    onThemeModeChange = { mode ->
+                        themeMode = mode
+                        AppState.saveThemeMode(mode)
+                    },
+                    fontSizeSp = fontSizeSp,
+                    onFontSizeChange = { size ->
+                        fontSizeSp = size
+                        AppState.saveFontSizeSp(size)
+                    },
+                    romajiFontSizeSp = romajiFontSizeSp,
+                    onRomajiFontSizeChange = { size ->
+                        romajiFontSizeSp = size
+                        AppState.saveRomajiFontSizeSp(size)
+                    },
+                    opacity = opacity,
+                    onOpacityChange = { value ->
+                        opacity = value
+                        AppState.saveOpacity(value)
+                    },
+                    showNextLine = showNextLine,
+                    onShowNextLineChange = { value ->
+                        showNextLine = value
+                        AppState.saveShowNextLine(value)
+                    },
+                    offsetMs = offsetMs,
+                    onOffsetChange = { value ->
+                        offsetMs = value
+                        AppState.saveOffsetMs(value)
+                    },
+                    autoHide = autoHide,
+                    onAutoHideChange = { value ->
+                        autoHide = value
+                        AppState.saveAutoHide(value)
+                    },
+                    clickPassThrough = clickPassThrough,
+                    onClickPassThroughChange = { value ->
+                        clickPassThrough = value
+                        AppState.saveClickPassThrough(value)
+                    },
+                    hoverMenuPosition = hoverMenuPosition,
+                    onHoverMenuPositionChange = { value ->
+                        hoverMenuPosition = value
+                        AppState.saveHoverMenuPosition(value)
+                    },
+                    anchor = overlayAnchor,
+                    onAnchorChange = { anchor ->
+                        overlayAnchor = anchor
+                        AppState.saveOverlayAnchor(anchor)
+                        customPosition = null
+                    },
+                    preferredPlayer = preferredPlayer,
+                    onPreferredPlayerChange = { identity ->
+                        preferredPlayer = identity
+                        AppState.savePreferredPlayer(identity)
+                    },
+                    players = players,
+                    onResetOverlayPosition = {
+                        customPosition = null
+                    },
+                    showIntervalIndicator = showIntervalIndicator,
+                    onShowIntervalIndicatorChange = { value ->
+                        showIntervalIndicator = value
+                        AppState.saveShowIntervalIndicator(value)
+                    },
+                    respectAgentPositioning = respectAgentPositioning,
+                    onRespectAgentPositioningChange = { value ->
+                        respectAgentPositioning = value
+                        AppState.saveRespectAgentPositioning(value)
+                    },
+                    wordKaraoke = wordKaraoke,
+                    onWordKaraokeChange = { value ->
+                        wordKaraoke = value
+                        AppState.saveWordKaraoke(value)
+                    },
+                    romanizeJapanese = romanizeJapanese,
+                    onRomanizeJapaneseChange = { value ->
+                        romanizeJapanese = value
+                        repository.setRomanizeJapanese(value)
+                    },
+                    textPosition = textPosition,
+                    onTextPositionChange = { value ->
+                        textPosition = value
+                        AppState.saveTextPosition(value.name)
+                    },
+                    autoScroll = autoScroll,
+                    onAutoScrollChange = { value ->
+                        autoScroll = value
+                        AppState.saveAutoScroll(value)
+                    },
+                    textOutline = textOutline,
+                    onTextOutlineChange = { value ->
+                        textOutline = value
+                        AppState.saveTextOutline(value)
+                    },
+                    enabledProviders = enabledProviders,
+                    onProviderEnabledChange = { name, enabled ->
+                        val next = enabledProviders.toMutableSet()
+                        if (enabled) next.add(name) else next.remove(name)
+                        enabledProviders = next
+                        LyricsProviders.setEnabled(next)
+                    },
+                    onClose = { settingsVisible = false },
+                )
+                DialogResizeZones(window)
+            }
         }
     }
 }

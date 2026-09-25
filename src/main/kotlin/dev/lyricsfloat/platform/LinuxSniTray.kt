@@ -155,6 +155,7 @@ private const val MENU_SEARCH = 3
 private const val MENU_SETTINGS = 4
 private const val MENU_QUIT = 6
 private const val MENU_PASS_THROUGH = 7
+private const val MENU_HEADER = 8
 
 /**
  * StatusNotifierItem tray for Plasma/Freedesktop shells over the session bus.
@@ -166,6 +167,7 @@ class LinuxSniTray(
     private val onSettings: () -> Unit,
     private val onToggleClickPassThrough: () -> Unit,
     private val clickPassThroughEnabled: () -> Boolean,
+    private val overlayVisible: () -> Boolean,
     private val onQuit: () -> Unit,
 ) {
     private var connection: DBusConnection? = null
@@ -227,33 +229,36 @@ class LinuxSniTray(
     }
 
     private fun menuItems(): List<MenuLayout> = listOf(
-        MenuLayout(MENU_TOGGLE, itemProps("Show / Hide lyrics", "view-form-text"), emptyList()),
-        MenuLayout(2, mapOf("type" to Variant("separator")), emptyList()),
-        MenuLayout(MENU_SEARCH, itemProps("Search lyrics", "edit-find"), emptyList()),
-        MenuLayout(MENU_SETTINGS, itemProps("Settings", "preferences-system"), emptyList()),
+        MenuLayout(MENU_HEADER, itemProps("Lyrics Float", TrayMenuIcon.APP, enabled = false), emptyList()),
+        MenuLayout(9, separatorProps(), emptyList()),
+        MenuLayout(MENU_TOGGLE, toggleProps(), emptyList()),
+        MenuLayout(MENU_SEARCH, itemProps("Search lyrics", TrayMenuIcon.SEARCH), emptyList()),
+        MenuLayout(MENU_SETTINGS, itemProps("Settings", TrayMenuIcon.SETTINGS), emptyList()),
+        MenuLayout(2, separatorProps(), emptyList()),
         MenuLayout(MENU_PASS_THROUGH, passThroughProps(), emptyList()),
-        MenuLayout(5, mapOf("type" to Variant("separator")), emptyList()),
-        MenuLayout(MENU_QUIT, itemProps("Quit", "application-exit"), emptyList()),
+        MenuLayout(5, separatorProps(), emptyList()),
+        MenuLayout(MENU_QUIT, itemProps("Quit", TrayMenuIcon.QUIT), emptyList()),
     )
 
-    private fun itemProps(label: String, iconName: String? = null): Map<String, Variant<Any?>> {
-        val props = linkedMapOf<String, Variant<Any?>>(
+    private fun separatorProps(): Map<String, Variant<Any?>> = mapOf("type" to Variant("separator"))
+
+    private fun toggleProps(): Map<String, Variant<Any?>> =
+        if (overlayVisible()) itemProps("Hide lyrics", TrayMenuIcon.HIDE)
+        else itemProps("Show lyrics", TrayMenuIcon.SHOW)
+
+    private fun itemProps(label: String, icon: TrayMenuIcon, enabled: Boolean = true): Map<String, Variant<Any?>> {
+        return linkedMapOf(
             "label" to Variant(label),
-            "enabled" to Variant(true),
+            "enabled" to Variant(enabled),
+            "icon-data" to Variant(TrayMenuIcons.png(icon, trayIconIsDark())),
         )
-        if (iconName != null) {
-            props["icon-name"] = Variant(iconName)
-        }
-        return props
     }
 
-    // dbusmenu checkmark toggle; the state is read on every menu open so the
-    // checkmark follows toggles made from the settings window.
-    private fun passThroughProps(): Map<String, Variant<Any?>> = linkedMapOf(
-        "label" to Variant("Click pass-through"),
-        "enabled" to Variant(true),
-        "toggle-type" to Variant("checkmark"),
-        "toggle-state" to Variant(if (clickPassThroughEnabled()) 1 else 0),
+    // Qt gives a checkable menu item's icon slot to its checkmark. Use an
+    // ordinary action with stateful artwork so this row has its own icon.
+    private fun passThroughProps(): Map<String, Variant<Any?>> = itemProps(
+        "Click pass-through",
+        if (clickPassThroughEnabled()) TrayMenuIcon.PASS_ON else TrayMenuIcon.PASS_OFF,
     )
 
     private fun rootLayout(depth: Int): MenuLayout {
@@ -308,11 +313,12 @@ class LinuxSniTray(
         override fun GetGroupProperties(ids: List<Int>, propertyNames: List<String>): List<ItemProperties> {
             return ids.map { id ->
                 val props = when (id) {
-                    MENU_TOGGLE -> itemProps("Show / Hide lyrics", "view-form-text")
-                    MENU_SEARCH -> itemProps("Search lyrics", "edit-find")
-                    MENU_SETTINGS -> itemProps("Settings", "preferences-system")
+                    MENU_HEADER -> itemProps("Lyrics Float", TrayMenuIcon.APP, enabled = false)
+                    MENU_TOGGLE -> toggleProps()
+                    MENU_SEARCH -> itemProps("Search lyrics", TrayMenuIcon.SEARCH)
+                    MENU_SETTINGS -> itemProps("Settings", TrayMenuIcon.SETTINGS)
                     MENU_PASS_THROUGH -> passThroughProps()
-                    MENU_QUIT -> itemProps("Quit", "application-exit")
+                    MENU_QUIT -> itemProps("Quit", TrayMenuIcon.QUIT)
                     else -> emptyMap()
                 }
                 ItemProperties(id, props)

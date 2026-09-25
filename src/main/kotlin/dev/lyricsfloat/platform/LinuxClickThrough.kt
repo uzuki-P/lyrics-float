@@ -41,7 +41,7 @@ private const val YX_BANDED = 3
  * Click pass-through for the lyrics pill, via the X Shape extension: a
  * stripped-down input region makes XWayland deliver clicks on the rest of the
  * pill to the windows below (KWin forwards them to the Wayland surface
- * underneath). A narrow strip along the top keeps its input shape so the
+ * underneath). A narrow strip beside the hover menu keeps its input shape so the
  * hover header - and its pass-through action - stays reachable.
  */
 object LinuxClickThrough {
@@ -59,18 +59,19 @@ object LinuxClickThrough {
     }
 
     /**
-     * Shapes the window's input region. With [passThrough] on, only the top
+     * Shapes the window's input region. With [passThrough] on, only the menu
      * [rescueStripPx] remain interactive; with it off, the input shape is
      * removed entirely (mask None + ShapeSet restores the default region).
      */
-    fun apply(window: Window, passThrough: Boolean, rescueStripPx: Int) {
+    fun apply(window: Window, passThrough: Boolean, rescueStripPx: Int, menuAtBottom: Boolean = false) {
         try {
             val (link, conn) = connection() ?: return
             val target = X11.Window(Native.getWindowID(window))
             if (passThrough) {
                 val strip = X11.XRectangle(
                     0,
-                    0,
+                    (if (menuAtBottom) (window.height - rescueStripPx).coerceAtLeast(0) else 0)
+                        .coerceAtMost(Short.MAX_VALUE.toInt()).toShort(),
                     window.width.coerceAtMost(Short.MAX_VALUE.toInt()).toShort(),
                     rescueStripPx.coerceAtMost(Short.MAX_VALUE.toInt()).toShort(),
                 )

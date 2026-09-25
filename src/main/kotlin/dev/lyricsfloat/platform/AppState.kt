@@ -1,6 +1,7 @@
 package dev.lyricsfloat.platform
 
 import dev.lyricsfloat.ui.ThemeMode
+import dev.lyricsfloat.ui.HoverMenuPosition
 import java.io.File
 
 /**
@@ -42,6 +43,12 @@ object AppState {
             ?: WindowAnchor.BOTTOM_CENTER
 
     fun saveOverlayAnchor(anchor: WindowAnchor) = writeField("overlay.anchor", anchor.name)
+
+    fun loadHoverMenuPosition(): HoverMenuPosition =
+        readField("overlay.hoverMenuPosition")?.let { runCatching { HoverMenuPosition.valueOf(it) }.getOrNull() }
+            ?: HoverMenuPosition.TOP
+
+    fun saveHoverMenuPosition(position: HoverMenuPosition) = writeField("overlay.hoverMenuPosition", position.name)
 
     // Overlay size, in dp. Resizable since the Metrolist feature port; the
     // historical fixed 560x170 dp pill is the default.
@@ -126,7 +133,7 @@ object AppState {
 
     fun saveAutoHide(autoHide: Boolean) = writeField("behavior.autoHide", autoHide.toString())
 
-    /** Clicks fall through the pill except for the top hover strip. */
+    /** Clicks fall through the pill except for the hover menu strip. */
     fun loadClickPassThrough(): Boolean = readField("behavior.clickPassThrough") == "true"
 
     fun saveClickPassThrough(value: Boolean) = writeField("behavior.clickPassThrough", value.toString())

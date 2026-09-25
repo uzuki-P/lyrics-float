@@ -86,6 +86,8 @@ fun SettingsView(
     onAutoHideChange: (Boolean) -> Unit,
     clickPassThrough: Boolean,
     onClickPassThroughChange: (Boolean) -> Unit,
+    hoverMenuPosition: HoverMenuPosition,
+    onHoverMenuPositionChange: (HoverMenuPosition) -> Unit,
     anchor: WindowAnchor,
     onAnchorChange: (WindowAnchor) -> Unit,
     preferredPlayer: String?,
@@ -285,8 +287,20 @@ fun SettingsView(
                 ToggleRow("Show surrounding lines", showNextLine, onShowNextLineChange, palette)
                 ToggleRow("Hide when nothing is playing", autoHide, onAutoHideChange, palette)
                 ToggleRow("Click pass-through", clickPassThrough, onClickPassThroughChange, palette)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Hover menu", style = TextStyle(fontSize = 13.sp), color = palette.onSurface,
+                        modifier = Modifier.weight(1f))
+                    ChipRow(
+                        options = listOf("Top", "Bottom"),
+                        selectedLabels = HoverMenuPosition.entries.map { it == hoverMenuPosition },
+                        onSelect = { onHoverMenuPositionChange(HoverMenuPosition.entries[it]) },
+                    )
+                }
                 Text(
-                    "Clicks fall through the pill to the windows below; the top hover strip stays active so you can turn this off.",
+                    "Clicks fall through the pill to the windows below; the hover menu stays active so you can turn this off.",
                     style = TextStyle(fontSize = 11.sp),
                     color = palette.onSurfaceDim,
                 )

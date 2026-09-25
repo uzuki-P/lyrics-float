@@ -4,6 +4,7 @@ import dev.lyricsfloat.mpris.NowPlayingMonitor
 import dev.lyricsfloat.mpris.TrackInfo
 import dev.lyricsfloat.platform.AppState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,8 +45,8 @@ data class LyricsState(
  */
 class LyricsRepository(private val scope: CoroutineScope) {
     /**
-     * A manual pick. Either an Lrclib track id (persisted stable), or a
-     * provider replay: re-run [provider] against the stored title/artist.
+     * A manual pick. New picks keep the exact selected lyrics; older picks
+     * without text still replay their Lrclib id or provider query.
      */
     @Serializable
     private data class OverrideEntry(
@@ -54,7 +55,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
         val title: String? = null,
         val artist: String? = null,
         val durationMs: Long? = null,
-        /** Hand-entered lyrics (Metrolist's "Manual" provider); stored verbatim. */
+        /** The exact picked or hand-entered lyrics, stored verbatim. */
         val text: String? = null,
     )
 
@@ -181,17 +182,25 @@ class LyricsRepository(private val scope: CoroutineScope) {
     }
 
     private suspend fun load(track: TrackInfo, key: String): LyricsState {
-        withContext(Dispatchers.IO) { diskCache.read(track) }?.let { saved ->
-            if (saved.manual == overrides.containsKey(key)) {
-                return toState(track, key, saved.text, saved.provider, saved.manual)
-            }
+        val saved = withContext(Dispatchers.IO) { diskCache.read(track) }
+        if (saved != null && saved.manual == overrides.containsKey(key)) {
+            return toState(track, key, saved.text, saved.provider, saved.manual)
         }
         // A manual pick wins over anything automatic.
         overrides[key]?.let { entry ->
             fetchOverrideText(entry).text?.let { text ->
+                if (entry.text == null) {
+                    overrides[key] = entry.copy(text = text)
+                    saveOverrides()
+                }
                 withContext(Dispatchers.IO) { diskCache.write(track, text, entry.provider ?: "Lrclib", true) }
                 return toState(track, key, text, entry.provider ?: "Lrclib", fromOverride = true)
             }
+        }
+        // A legacy provider replay can fail even when an automatic copy is
+        // already on disk. Use that copy before starting the provider chain.
+        saved?.takeIf { !it.manual }?.let {
+            return toState(track, key, it.text, it.provider)
         }
         return autoChain(track, key)
     }
@@ -199,14 +208,40 @@ class LyricsRepository(private val scope: CoroutineScope) {
     /** Fetch result for a stored pick: the text, or why it failed. */
     private data class OverrideFetch(val text: String?, val error: String?)
 
-    /** Re-fetches the manually picked lyrics; [OverrideFetch.error] says why on failure. */
+    /** Reads pinned lyrics, or re-fetches older picks that have no saved text. */
     private suspend fun fetchOverrideText(entry: OverrideEntry): OverrideFetch = when {
+        entry.text != null -> OverrideFetch(entry.text, null)
         entry.lrclibId != null -> {
             val text = LrcLib.getById(entry.lrclibId)?.let { it.syncedLyrics ?: it.plainLyrics }
             if (text != null) OverrideFetch(text, null)
             else OverrideFetch(null, "Lrclib: track not found")
         }
-        entry.text != null -> OverrideFetch(entry.text, null)
+        entry.provider == "KuGou" -> {
+            val selected = try {
+                withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
+                    KuGouProvider.searchForManual(entry.title.orEmpty())
+                        .filter { result ->
+                            result.title.trim().equals(entry.title?.trim(), ignoreCase = true) &&
+                                (entry.artist.isNullOrBlank() ||
+                                    result.artist.trim().equals(entry.artist.trim(), ignoreCase = true)) &&
+                                (entry.durationMs == null || result.durationMs == null ||
+                                    kotlin.math.abs(result.durationMs - entry.durationMs) <= 5_000)
+                        }
+                        .minByOrNull { result ->
+                            if (result.durationMs != null && entry.durationMs != null)
+                                kotlin.math.abs(result.durationMs - entry.durationMs)
+                            else Long.MAX_VALUE
+                        }
+                        ?.fetch()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (!selected.isNullOrBlank()) OverrideFetch(selected, null)
+            else OverrideFetch(null, "KuGou: selected row is no longer available")
+        }
         entry.provider != null -> {
             val provider = LyricsProviders.byName(entry.provider)
             if (provider == null) {
@@ -271,47 +306,48 @@ class LyricsRepository(private val scope: CoroutineScope) {
     }
 
     /**
-     * Applies a manually picked result and waits for it to load. Returns null
-     * on success, or the failure reason (shown on the picked row); the pill
-     * falls back to whatever was showing before on failure.
+     * Applies the exact search row. A failed fetch leaves the current lyrics,
+     * override and disk cache intact.
      */
     suspend fun applyManualPick(result: ManualSearchResult, playingTrack: TrackInfo?): String? {
         val track = playingTrack?.takeIf(TrackInfo::hasContent) ?: return "Nothing is playing"
         val key = keyFor(track)
-        trackInfoByKey[key] = track
-        overrideTargetKey = key
+        val text = try {
+            result.previewText?.takeIf(String::isNotBlank)
+                ?: withTimeoutOrNull(PROVIDER_TIMEOUT_MS) { result.fetch() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return "${result.provider}: ${e.message ?: "Could not load lyrics"}"
+        }?.takeIf(String::isNotBlank)
+            ?: return "${result.provider}: No lyrics for this result"
+
         val entry = when {
             result.provider == "Lrclib" && result.lrclibId != null ->
-                OverrideEntry(lrclibId = result.lrclibId)
+                OverrideEntry(lrclibId = result.lrclibId, text = text)
             else ->
                 OverrideEntry(
                     provider = result.provider,
                     title = result.title,
                     artist = result.artist,
                     durationMs = result.durationMs,
+                    text = text,
                 )
         }
+        val state = toState(track, key, text, result.provider, fromOverride = true)
+        trackInfoByKey[key] = track
         overrides[key] = entry
         saveOverrides()
-        withContext(Dispatchers.IO) { diskCache.remove(track) }
-        loadJob?.cancel()
-        val previous = cache.remove(key)
-        overrideTargetKey = key
-        loadingInternal.value = true
-        // Try the pick itself first: one focused request, fast feedback.
-        val fetched = fetchOverrideText(entry)
-        val state = if (fetched.text != null) {
-            withContext(Dispatchers.IO) { diskCache.write(track, fetched.text, entry.provider ?: "Lrclib", true) }
-            toState(track, key, fetched.text, entry.provider ?: "Lrclib", fromOverride = true)
-        } else {
-            // Pick failed: fall back to what was showing (or the auto chain).
-            previous ?: autoChain(track, key)
-        }
-        loadingInternal.value = false
+        withContext(Dispatchers.IO) { diskCache.write(track, text, result.provider, true) }
         cache[key] = state
-        currentInternal.value = state
-        startRomanization(state)
-        return fetched.error
+        if (overrideTargetKey == key || overrideTargetKey.isEmpty()) {
+            loadJob?.cancel()
+            overrideTargetKey = key
+            loadingInternal.value = false
+            currentInternal.value = state
+            startRomanization(state)
+        }
+        return null
     }
 
     /**

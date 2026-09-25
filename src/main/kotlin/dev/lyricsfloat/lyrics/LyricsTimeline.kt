@@ -58,16 +58,16 @@ fun List<LyricsEntry>.withIntervalIndicators(
 }
 
 /**
- * Fake word timings (0.18 s per word) for synced lines without word-level
- * data, so every synced line still karaoke-animates. Same numbers Metrolist
- * uses for this fallback.
+ * Fake word timings for synced lines without word-level data, so every
+ * synced line still karaoke-animates. Metrolist starts words 0.03 s apart
+ * and fades each one in over 0.18 s.
  */
 fun synthesizeWords(text: String, lineStartMs: Long): List<WordTimestamp> {
     val tokens = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
     if (tokens.isEmpty()) return emptyList()
     val startSec = lineStartMs / 1000.0
     return tokens.mapIndexed { i, token ->
-        val start = startSec + i * 0.18
+        val start = startSec + i * 0.03
         WordTimestamp(text = token, startTime = start, endTime = start + 0.18)
     }
 }

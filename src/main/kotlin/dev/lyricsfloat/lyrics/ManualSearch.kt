@@ -1,5 +1,16 @@
 package dev.lyricsfloat.lyrics
 
+enum class LyricsTiming { WORD, LINE, PLAIN }
+
+fun detectLyricsTiming(text: String, durationMs: Long?): LyricsTiming {
+    val parsed = LyricsParser.parse(text, durationMs)
+    return when {
+        parsed.entries.any { !it.words.isNullOrEmpty() } -> LyricsTiming.WORD
+        parsed.synced -> LyricsTiming.LINE
+        else -> LyricsTiming.PLAIN
+    }
+}
+
 /**
  * One row of the manual search dialog. [fetch] pulls the extended LRC text
  * when the row is picked; [synced] is null when it cannot be known upfront
@@ -12,6 +23,8 @@ data class ManualSearchResult(
     val durationMs: Long?,
     val synced: Boolean?,
     val lrclibId: Long? = null,
+    val timing: LyricsTiming? = null,
+    val previewText: String? = null,
     val fetch: suspend () -> String?,
 )
 
@@ -35,6 +48,7 @@ object ManualSearch {
 
         if (wanted("Lrclib")) {
             LrcLib.search(query).take(12).forEach { track ->
+                val lyrics = track.syncedLyrics ?: track.plainLyrics
                 results.add(
                     ManualSearchResult(
                         provider = "Lrclib",
@@ -43,6 +57,8 @@ object ManualSearch {
                         durationMs = track.durationMillis(),
                         synced = track.syncedLyrics != null,
                         lrclibId = track.id,
+                        timing = lyrics?.let { detectLyricsTiming(it, track.durationMillis()) },
+                        previewText = lyrics,
                     ) {
                         LrcLib.getById(track.id)?.let { it.syncedLyrics ?: it.plainLyrics }
                     },

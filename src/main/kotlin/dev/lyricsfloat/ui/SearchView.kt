@@ -12,13 +12,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,12 +48,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.lyricsfloat.lyrics.LyricsProviders
+import dev.lyricsfloat.lyrics.LyricsParser
+import dev.lyricsfloat.lyrics.LyricsTiming
 import dev.lyricsfloat.lyrics.ManualSearch
 import dev.lyricsfloat.lyrics.ManualSearchResult
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private fun providerColor(name: String): Color = when (name) {
     "Lrclib" -> Color(0xFF7DD3FC)
@@ -62,12 +69,21 @@ private fun providerColor(name: String): Color = when (name) {
     else -> Color(0xFFCBD5E1)
 }
 
+private data class LyricsPreview(val rawText: String, val text: String, val timing: LyricsTiming)
+
+private fun LyricsTiming.label(): String = when (this) {
+    LyricsTiming.WORD -> "Word by word"
+    LyricsTiming.LINE -> "Line by line"
+    LyricsTiming.PLAIN -> "Plain text"
+}
+
 /**
  * Manual lyrics search across providers. Opens pre-filled with the current
  * song. Picks are applied to the track that is currently playing (via MPRIS),
  * overriding the automatic match; the picked row shows an Applying spinner and
  * a failure mark when the fetch did not load (network). Results carry a
- * provider badge; a chip row filters which providers are queried. "Web"
+ * provider and timing badges, plus an expandable text preview. A chip row
+ * filters which providers are queried. "Web"
  * searches the browser for `<query> lyrics` (Metrolist's search-online
  * action), and "Add lyrics manually" opens a paste-in editor (plain text or
  * LRC) that applies to the playing track as a Manual override.
@@ -103,6 +119,11 @@ fun SearchView(
     var failedKey by remember { mutableStateOf<String?>(null) }
     var failedReason by remember { mutableStateOf<String?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
+    val previewCache = remember { mutableStateMapOf<String, LyricsPreview>() }
+    var expandedKey by remember { mutableStateOf<String?>(null) }
+    var previewLoading by remember { mutableStateOf(false) }
+    var previewError by remember { mutableStateOf<String?>(null) }
+    var previewJob by remember { mutableStateOf<Job?>(null) }
 
     // Manual-entry sub-page. Keyed like [query]: a song change leaves the form.
     var manualMode by remember(initialQuery) { mutableStateOf(false) }
@@ -122,6 +143,11 @@ fun SearchView(
 
     fun invalidateSearch() {
         searchJob?.cancel()
+        previewJob?.cancel()
+        previewCache.clear()
+        expandedKey = null
+        previewLoading = false
+        previewError = null
         searching = false
         results = null
     }
@@ -130,6 +156,9 @@ fun SearchView(
         val q = query.trim()
         if (q.isEmpty()) return
         searchJob?.cancel()
+        previewJob?.cancel()
+        previewCache.clear()
+        expandedKey = null
         searching = true
         results = null
         searchJob = scope.launch {
@@ -137,6 +166,43 @@ fun SearchView(
                 results = search(q, providerFilter)
             } finally {
                 if (currentCoroutineContext().isActive) searching = false
+            }
+        }
+    }
+
+    fun togglePreview(rowKey: String, result: ManualSearchResult) {
+        previewJob?.cancel()
+        if (expandedKey == rowKey) {
+            expandedKey = null
+            previewLoading = false
+            return
+        }
+        expandedKey = rowKey
+        previewError = null
+        previewLoading = !previewCache.containsKey(rowKey)
+        if (!previewLoading) return
+
+        previewJob = scope.launch {
+            try {
+                val raw = withContext(Dispatchers.IO) { result.previewText ?: result.fetch() }
+                    ?.takeIf(String::isNotBlank) ?: error("No lyrics returned")
+                val preview = withContext(Dispatchers.Default) {
+                    val parsed = LyricsParser.parse(raw, result.durationMs)
+                    val timing = when {
+                        parsed.entries.any { !it.words.isNullOrEmpty() } -> LyricsTiming.WORD
+                        parsed.synced -> LyricsTiming.LINE
+                        else -> LyricsTiming.PLAIN
+                    }
+                    val lines = parsed.entries.map { it.text }.filter(String::isNotBlank)
+                    LyricsPreview(raw, lines.joinToString("\n").ifBlank { raw }, timing)
+                }
+                previewCache[rowKey] = preview
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (expandedKey == rowKey) previewError = e.message ?: "Could not load lyrics"
+            } finally {
+                if (expandedKey == rowKey && currentCoroutineContext().isActive) previewLoading = false
             }
         }
     }
@@ -295,13 +361,6 @@ fun SearchView(
                 }
 
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    "Dot: pink = synced lyrics, gray = plain text.",
-                    style = TextStyle(fontSize = 10.sp),
-                    color = palette.onSurfaceDim,
-                )
-                Spacer(Modifier.height(2.dp))
-
                 if (hasTarget) {
                     Text(
                         text = "Applies to: ${targetTitle.ifBlank { "Unknown" }} — ${targetArtist.ifBlank { "Unknown" }}",
@@ -392,15 +451,25 @@ fun SearchView(
                                 val rowKey = "$index-${result.provider}-${result.lrclibId ?: result.title}"
                                 SearchResultRow(
                                     result = result,
+                                    timing = previewCache[rowKey]?.timing ?: result.timing
+                                        ?: if (result.synced == false) LyricsTiming.PLAIN else null,
+                                    preview = previewCache[rowKey],
+                                    previewOpen = expandedKey == rowKey,
+                                    previewLoading = expandedKey == rowKey && previewLoading,
+                                    previewError = previewError.takeIf { expandedKey == rowKey },
                                     pending = pendingKey == rowKey,
                                     failedReason = failedKey.takeIf { it == rowKey }?.let { failedReason },
+                                    onPreview = { togglePreview(rowKey, result) },
                                     onClick = {
                                         if (pendingKey == null) {
                                             pendingKey = rowKey
                                             failedKey = null
                                             failedReason = null
                                             scope.launch {
-                                                val error = onPick(result)
+                                                val selected = result.copy(
+                                                    previewText = previewCache[rowKey]?.rawText ?: result.previewText,
+                                                )
+                                                val error = onPick(selected)
                                                 pendingKey = null
                                                 if (error != null) {
                                                     failedKey = rowKey
@@ -552,90 +621,140 @@ private fun ProviderChip(
 @Composable
 private fun SearchResultRow(
     result: ManualSearchResult,
+    timing: LyricsTiming?,
+    preview: LyricsPreview?,
+    previewOpen: Boolean,
+    previewLoading: Boolean,
+    previewError: String?,
     pending: Boolean,
     failedReason: String?,
+    onPreview: () -> Unit,
     onClick: () -> Unit,
 ) {
     val palette = LocalAppPalette.current
     val shape = RoundedCornerShape(10.dp)
     val badge = providerColor(result.provider)
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(onClick = onClick)
             .background(
                 when {
                     pending -> palette.accent.copy(alpha = 0.10f)
                     else -> palette.onSurface.copy(alpha = 0.04f)
                 },
             )
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Provider badge
-        Text(
-            result.provider,
-            style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-            color = badge,
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(badge.copy(alpha = 0.14f))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                result.title,
-                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                color = palette.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                result.provider,
+                style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                color = badge,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(badge.copy(alpha = 0.14f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
             )
-            if (result.artist.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    result.artist,
+                    result.title,
+                    style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                    color = palette.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (result.artist.isNotBlank()) {
+                    Text(
+                        result.artist,
+                        style = TextStyle(fontSize = 11.sp),
+                        color = palette.onSurfaceDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    timing?.label() ?: "Preview to check timing",
+                    style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                    color = when (timing) {
+                        LyricsTiming.WORD -> palette.accent
+                        LyricsTiming.LINE -> Color(0xFF7DD3FC)
+                        else -> palette.onSurfaceDim
+                    },
+                )
+                if (failedReason != null) {
+                    Text(
+                        "Couldn't load: $failedReason — click to retry",
+                        style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                        color = Color(0xFFF87171),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            result.durationMs?.takeIf { failedReason == null }?.let { ms ->
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "%d:%02d".format(ms / 60_000, (ms % 60_000) / 1000),
                     style = TextStyle(fontSize = 11.sp),
                     color = palette.onSurfaceDim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (failedReason != null) {
-                Text(
-                    "Couldn't load: $failedReason — click to retry",
-                    style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
-                    color = Color(0xFFF87171),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        result.durationMs?.takeIf { failedReason == null }?.let { ms ->
             Spacer(Modifier.width(8.dp))
             Text(
-                "%d:%02d".format(ms / 60_000, (ms % 60_000) / 1000),
-                style = TextStyle(fontSize = 11.sp),
-                color = palette.onSurfaceDim,
+                if (previewOpen) "Hide" else "Preview",
+                style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                color = palette.accent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onPreview)
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
             )
-        }
-        when {
-            pending -> {
-                Spacer(Modifier.width(8.dp))
+            if (pending) {
+                Spacer(Modifier.width(4.dp))
                 CircularProgressIndicator(
                     modifier = Modifier.size(13.dp),
                     strokeWidth = 1.5.dp,
                     color = palette.accent,
                 )
             }
-            result.synced != null && failedReason == null -> {
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (result.synced) palette.accent else palette.onSurfaceDim.copy(alpha = 0.4f)),
+        }
+        if (previewOpen) {
+            when {
+                previewLoading -> Text(
+                    "Loading lyrics…",
+                    style = TextStyle(fontSize = 11.sp),
+                    color = palette.onSurfaceDim,
+                    modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
                 )
+                previewError != null -> Text(
+                    "Preview unavailable: $previewError",
+                    style = TextStyle(fontSize = 11.sp),
+                    color = Color(0xFFF87171),
+                    modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
+                )
+                preview != null -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, end = 10.dp, bottom = 10.dp)
+                        .heightIn(max = 230.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(palette.onSurface.copy(alpha = 0.05f))
+                        .verticalScroll(rememberScrollState())
+                        .padding(10.dp),
+                ) {
+                    Text(
+                        preview.text,
+                        style = TextStyle(fontSize = 11.sp, lineHeight = 17.sp),
+                        color = palette.onSurface,
+                    )
+                }
             }
         }
     }

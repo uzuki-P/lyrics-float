@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,23 +44,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.lyricsfloat.lyrics.LyricsEntry
@@ -71,10 +75,13 @@ import dev.lyricsfloat.lyrics.synthesizeWords
 import dev.lyricsfloat.lyrics.withIntervalIndicators
 import dev.lyricsfloat.mpris.ActivePlayback
 import kotlinx.coroutines.isActive
+import java.awt.Cursor
 import kotlin.math.roundToInt
 
 /** Metrolist's LyricsTextPosition setting: default line alignment. */
 enum class LyricsTextPosition { LEFT, CENTER, RIGHT }
+
+enum class HoverMenuPosition { TOP, BOTTOM }
 
 private val TEXT_SHADOW = Shadow(Color.Black.copy(alpha = 0.75f), Offset(0f, 2f), 8f)
 private val SUB_SHADOW = Shadow(Color.Black.copy(alpha = 0.7f), Offset(0f, 1f), 5f)
@@ -138,13 +145,19 @@ private fun LyricText(
 @Composable
 private fun LyricKaraokeText(
     plainText: String,
-    annotated: androidx.compose.ui.text.AnnotatedString,
+    words: List<WordTimestamp>,
+    positionSeconds: Double,
+    bright: Color,
+    dim: Color,
+    smoothTransition: Boolean,
     style: TextStyle,
     align: TextAlign,
     outline: Boolean,
     outlinePx: Float,
     modifier: Modifier = Modifier,
 ) {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
     if (outline) {
         Box(modifier) {
             Text(
@@ -157,26 +170,101 @@ private fun LyricKaraokeText(
                 overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text(
-                text = annotated,
+            KaraokeColorFill(
+                text = plainText,
+                words = words,
+                positionSeconds = positionSeconds,
+                bright = bright,
+                dim = dim,
+                smoothTransition = smoothTransition,
                 style = style,
-                textAlign = align,
-                maxLines = Int.MAX_VALUE,
-                softWrap = true,
-                overflow = TextOverflow.Clip,
+                align = align,
+                textMeasurer = textMeasurer,
+                density = density,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
     } else {
-        Text(
-            text = annotated,
+        KaraokeColorFill(
+            text = plainText,
+            words = words,
+            positionSeconds = positionSeconds,
+            bright = bright,
+            dim = dim,
+            smoothTransition = smoothTransition,
             style = style.copy(shadow = TEXT_SHADOW),
-            textAlign = align,
-            maxLines = Int.MAX_VALUE,
-            softWrap = true,
-            overflow = TextOverflow.Clip,
+            align = align,
+            textMeasurer = textMeasurer,
+            density = density,
             modifier = modifier.fillMaxWidth(),
         )
+    }
+}
+
+@Composable
+private fun KaraokeColorFill(
+    text: String,
+    words: List<WordTimestamp>,
+    positionSeconds: Double,
+    bright: Color,
+    dim: Color,
+    smoothTransition: Boolean,
+    style: TextStyle,
+    align: TextAlign,
+    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+    density: androidx.compose.ui.unit.Density,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier) {
+        val width = constraints.maxWidth
+        val layout = remember(text, style, width, align) {
+            textMeasurer.measure(
+                text = text,
+                style = style.copy(textAlign = align),
+                constraints = Constraints(minWidth = width, maxWidth = width),
+                softWrap = true,
+            )
+        }
+        Canvas(Modifier.fillMaxWidth().height(with(density) { layout.size.height.toDp() })) {
+            drawText(layout, color = dim)
+
+            var searchFrom = 0
+            words.forEach { word ->
+                if (word.text.isEmpty()) return@forEach
+                val start = text.indexOf(word.text, searchFrom)
+                if (start < 0) return@forEach
+                val end = (start + word.text.length).coerceAtMost(text.length)
+                searchFrom = end
+                if (word.hasTrailingSpace && searchFrom < text.length && text[searchFrom].isWhitespace()) {
+                    searchFrom++
+                }
+
+                val color = if (smoothTransition) {
+                    val progress = ((positionSeconds - word.startTime) / (word.endTime - word.startTime))
+                        .toFloat().coerceIn(0f, 1f)
+                    androidx.compose.ui.graphics.lerp(dim, bright, progress)
+                } else if (positionSeconds >= word.startTime) bright else dim
+
+                val boundsByLine = mutableMapOf<Int, androidx.compose.ui.geometry.Rect>()
+                for (offset in start until end) {
+                    val line = layout.getLineForOffset(offset)
+                    val bounds = layout.getBoundingBox(offset)
+                    boundsByLine[line] = boundsByLine[line]?.let {
+                        androidx.compose.ui.geometry.Rect(
+                            left = minOf(it.left, bounds.left),
+                            top = minOf(it.top, bounds.top),
+                            right = maxOf(it.right, bounds.right),
+                            bottom = maxOf(it.bottom, bounds.bottom),
+                        )
+                    } ?: bounds
+                }
+                boundsByLine.values.forEach { bounds ->
+                    clipRect(bounds.left, bounds.top, bounds.right, bounds.bottom) {
+                        drawText(layout, color = color)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -206,6 +294,7 @@ fun OverlayView(
     textOutline: Boolean,
     autoScroll: Boolean,
     clickPassThrough: Boolean,
+    hoverMenuPosition: HoverMenuPosition,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onToggleClickPassThrough: () -> Unit,
@@ -292,51 +381,25 @@ fun OverlayView(
                     .fillMaxSize()
                     .padding(horizontal = 18.dp, vertical = 10.dp),
             ) {
-                // Hover header: track identity + actions. Doubles as the
-                // window-move handle while lyrics occupy the rest of the pill.
-                AnimatedVisibility(visible = hovered) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pointerInput(Unit) {
-                                detectDragGestures(
-                                    onDragStart = { onDragStart() },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        onDrag(dragAmount.x, dragAmount.y)
-                                    },
-                                    onDragEnd = { onDragEnd() },
-                                    onDragCancel = { onDragEnd() },
-                                )
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = playback?.track?.let { track ->
-                                listOfNotNull(
-                                    track.title.takeIf(String::isNotBlank),
-                                    track.artist.takeIf(String::isNotBlank),
-                                ).joinToString(" — ")
-                            } ?: "Lyrics Float",
-                            style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, shadow = SUB_SHADOW),
-                            color = palette.onSurfaceDim,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        OverlayAction("Search", onSearch)
-                        OverlayAction("Settings", onSettings)
-                        OverlayAction(
-                            label = if (clickPassThrough) "Pass-through: on" else "Pass-through: off",
-                            onClick = onToggleClickPassThrough,
-                        )
-                    }
+                // The menu also acts as a move handle while lyrics occupy the pill.
+                if (hoverMenuPosition == HoverMenuPosition.TOP) AnimatedVisibility(visible = hovered) {
+                    HoverMenu(playback, palette, onDragStart, onDrag, onDragEnd, onSearch, onSettings,
+                        clickPassThrough, onToggleClickPassThrough)
                 }
 
                 when {
-                    playback == null -> HintLine("Play something in any media player", palette)
-                    loading -> HintLine("Looking up lyrics…", palette)
-                    entries.isEmpty() -> HintLine("No lyrics found", palette)
+                    playback == null -> {
+                        HintLine("Play something in any media player", palette)
+                        if (hoverMenuPosition == HoverMenuPosition.BOTTOM) Spacer(Modifier.weight(1f))
+                    }
+                    loading -> {
+                        HintLine("Looking up lyrics…", palette)
+                        if (hoverMenuPosition == HoverMenuPosition.BOTTOM) Spacer(Modifier.weight(1f))
+                    }
+                    entries.isEmpty() -> {
+                        HintLine("No lyrics found", palette)
+                        if (hoverMenuPosition == HoverMenuPosition.BOTTOM) Spacer(Modifier.weight(1f))
+                    }
                     else -> {
                         LyricsViewport(
                             lyrics = lyrics,
@@ -357,6 +420,10 @@ fun OverlayView(
                                 .fillMaxWidth(),
                         )
                     }
+                }
+                if (hoverMenuPosition == HoverMenuPosition.BOTTOM) AnimatedVisibility(visible = hovered) {
+                    HoverMenu(playback, palette, onDragStart, onDrag, onDragEnd, onSearch, onSettings,
+                        clickPassThrough, onToggleClickPassThrough)
                 }
             }
 
@@ -644,7 +711,8 @@ private fun LyricLineItem(
         if (isActive) {
             val effPosSec = (positionMs + offsetMs) / 1000.0
             val bright = activeColor
-            val dimWord = activeColor.copy(alpha = 0.32f)
+            val hasWordTimings = !entry.words.isNullOrEmpty()
+            val dimWord = if (hasWordTimings) Color.White else activeColor.copy(alpha = 0.32f)
 
             val words = when {
                 !wordKaraoke || !synced -> null
@@ -672,26 +740,13 @@ private fun LyricLineItem(
                     outlinePx = outlinePx,
                 )
             } else {
-                val annotated = buildAnnotatedString {
-                    words.forEachIndexed { i, w ->
-                        val start = length
-                        append(w.text)
-                        if (w.hasTrailingSpace && i < words.lastIndex) append(' ')
-                        val progress = when {
-                            effPosSec >= w.endTime -> 1f
-                            effPosSec <= w.startTime -> 0f
-                            else -> ((effPosSec - w.startTime) / (w.endTime - w.startTime)).toFloat()
-                        }
-                        addStyle(
-                            SpanStyle(color = lerp(dimWord, bright, progress)),
-                            start,
-                            length,
-                        )
-                    }
-                }
                 LyricKaraokeText(
                     plainText = entry.text,
-                    annotated = annotated,
+                    words = words,
+                    positionSeconds = effPosSec,
+                    bright = bright,
+                    dim = dimWord,
+                    smoothTransition = !hasWordTimings,
                     style = textStyle,
                     align = align,
                     outline = textOutline,
@@ -826,6 +881,49 @@ private fun HintLine(text: String, palette: AppPalette) {
 }
 
 @Composable
+private fun HoverMenu(
+    playback: ActivePlayback?,
+    palette: AppPalette,
+    onDragStart: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
+    clickPassThrough: Boolean,
+    onToggleClickPassThrough: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+            detectDragGestures(
+                onDragStart = { onDragStart() },
+                onDrag = { change, amount ->
+                    change.consume()
+                    onDrag(amount.x, amount.y)
+                },
+                onDragEnd = onDragEnd,
+                onDragCancel = onDragEnd,
+            )
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = playback?.track?.let { track ->
+                listOfNotNull(track.title.takeIf(String::isNotBlank), track.artist.takeIf(String::isNotBlank))
+                    .joinToString(" — ")
+            } ?: "Lyrics Float",
+            style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, shadow = SUB_SHADOW),
+            color = palette.onSurfaceDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        OverlayAction("Search", onSearch)
+        OverlayAction("Settings", onSettings)
+        OverlayAction(if (clickPassThrough) "Pass-through: on" else "Pass-through: off", onToggleClickPassThrough)
+    }
+}
+
+@Composable
 private fun OverlayAction(label: String, onClick: () -> Unit) {
     val palette = LocalAppPalette.current
     Text(
@@ -854,15 +952,26 @@ private fun BoxScope.ResizeZones(
     @Composable
     fun Handle(direction: Int, zoneModifier: Modifier) {
         var nativeResize by remember { mutableStateOf(false) }
+        var totalDrag by remember { mutableStateOf(Offset.Zero) }
+        val cursor = when (direction) {
+            0, 7 -> Cursor.NW_RESIZE_CURSOR
+            2, 5 -> Cursor.NE_RESIZE_CURSOR
+            1, 6 -> Cursor.N_RESIZE_CURSOR
+            else -> Cursor.E_RESIZE_CURSOR
+        }
         Box(
-            modifier = zoneModifier.pointerInput(direction) {
+            modifier = zoneModifier.pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(cursor))).pointerInput(direction) {
                 detectDragGestures(
                     onDragStart = {
+                        totalDrag = Offset.Zero
                         nativeResize = onResizeStart(direction)
                     },
                     onDrag = { change, amount ->
                         change.consume()
-                        if (!nativeResize) onManualResize(direction, amount.x, amount.y)
+                        if (!nativeResize) {
+                            totalDrag += amount
+                            onManualResize(direction, totalDrag.x, totalDrag.y)
+                        }
                     },
                     onDragEnd = { nativeResize = false },
                     onDragCancel = { nativeResize = false },
