@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Installs the newest AppImage under a stable name and registers a desktop
+# entry, so KDE kicker/KRunner and vicinae can start the app by name without
+# caring about the versioned/timestamped file names each new build produces.
+set -euo pipefail
+shopt -s nullglob
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+apps_dir="$HOME/apps"
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+if [[ "${1:-}" == "--uninstall" ]]; then
+    rm -f "$apps_dir/lyrics-float.AppImage"
+    rm -f "$data_dir/applications/lyrics-float.desktop"
+    rm -f "$data_dir/icons/hicolor/512x512/apps/lyrics-float.png"
+    echo "Removed the installed AppImage, desktop entry and icon."
+    exit 0
+fi
+
+# Newest build wins: gradle output first, then the dated _apk/ staging copies.
+candidates=(
+    "$repo"/build/compose/binaries/main/appimage/lyrics-float-*.AppImage
+    "$repo"/_apk/lyrics-float-*.AppImage
+)
+if [[ ${#candidates[@]} -eq 0 ]]; then
+    echo "No AppImage found — run 'just build' first." >&2
+    exit 1
+fi
+latest="${candidates[0]}"
+for candidate in "${candidates[@]}"; do
+    if [[ $candidate -nt $latest ]]; then latest=$candidate; fi
+done
+
+mkdir -p "$apps_dir" "$data_dir/applications" "$data_dir/icons/hicolor/512x512/apps"
+
+# Copy to a temp file and rename into place: overwriting an AppImage in place
+# would corrupt the squashfs mount while an old build is still running.
+target="$apps_dir/lyrics-float.AppImage"
+temp="$apps_dir/.lyrics-float.AppImage.new"
+cp -f "$latest" "$temp"
+chmod 755 "$temp"
+mv -f "$temp" "$target"
+
+# Sized icon directories want matching image sizes; the source art is much
+# larger, so downscale when possible (launchers skip or blur odd sizes).
+icon_dir="$data_dir/icons/hicolor/512x512/apps"
+icon="$icon_dir/lyrics-float.png"
+if command -v magick >/dev/null 2>&1; then
+    magick "$repo/src/main/resources/icons/lyrics-float-v2.png" -resize 512x512 "$icon"
+elif command -v convert >/dev/null 2>&1; then
+    convert "$repo/src/main/resources/icons/lyrics-float-v2.png" -resize 512x512 "$icon"
+else
+    cp -f "$repo/src/main/resources/icons/lyrics-float-v2.png" "$icon"
+fi
+
+# env -u: a polluted LD_LIBRARY_PATH (e.g. AppImage-hosted editors) makes the
+# Compose native launcher segfault at startup; desktop sessions normally
+# have a clean env, this only guards launches from a polluted one.
+cat > "$data_dir/applications/lyrics-float.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Lyrics Float
+GenericName=Lyrics overlay
+Comment=Floating synced lyrics for any MPRIS player
+Exec=env -u LD_LIBRARY_PATH $target
+Terminal=false
+Categories=AudioVideo;Audio;
+Icon=lyrics-float
+StartupWMClass=lyrics-float
+EOF
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$data_dir/applications" || true
+fi
+# KDE reads applications through KSycoca; without a refresh the new entry or
+# icon can stay invisible until an unrelated cache rebuild.
+if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 >/dev/null 2>&1 || true
+elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+    kbuildsycoca5 >/dev/null 2>&1 || true
+fi
+# GTK-side icon theme cache (harmless if the dir has no cache yet).
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t "$data_dir/icons/hicolor" >/dev/null 2>&1 || true
+fi
+
+echo "Installed: $target  (from $(basename "$latest"))"
+echo "Launcher:  $data_dir/applications/lyrics-float.desktop"

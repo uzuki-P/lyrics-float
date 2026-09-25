@@ -67,7 +67,10 @@ private fun providerColor(name: String): Color = when (name) {
  * song. Picks are applied to the track that is currently playing (via MPRIS),
  * overriding the automatic match; the picked row shows an Applying spinner and
  * a failure mark when the fetch did not load (network). Results carry a
- * provider badge; a chip row filters which providers are queried.
+ * provider badge; a chip row filters which providers are queried. "Web"
+ * searches the browser for `<query> lyrics` (Metrolist's search-online
+ * action), and "Add lyrics manually" opens a paste-in editor (plain text or
+ * LRC) that applies to the playing track as a Manual override.
  */
 @Composable
 fun SearchView(
@@ -77,6 +80,9 @@ fun SearchView(
     overrideApplied: Boolean,
     initialQuery: String,
     onPick: suspend (ManualSearchResult) -> String?,
+    onApplyManualText: suspend (String) -> String?,
+    currentLyricsText: suspend () -> String?,
+    onSearchWeb: (String) -> Unit,
     onClearOverride: () -> Unit,
     onClose: () -> Unit,
     search: suspend (String, String?) -> List<ManualSearchResult>,
@@ -98,7 +104,21 @@ fun SearchView(
     var failedReason by remember { mutableStateOf<String?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
 
+    // Manual-entry sub-page. Keyed like [query]: a song change leaves the form.
+    var manualMode by remember(initialQuery) { mutableStateOf(false) }
+    var manualText by remember { mutableStateOf("") }
+    var manualApplying by remember { mutableStateOf(false) }
+    var manualError by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    // Prefill the editor with the current lyrics every time the form opens.
+    LaunchedEffect(manualMode, initialQuery) {
+        if (manualMode) {
+            manualText = currentLyricsText() ?: ""
+            manualError = null
+        }
+    }
 
     fun invalidateSearch() {
         searchJob?.cancel()
@@ -135,207 +155,364 @@ fun SearchView(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Search lyrics",
+                    if (manualMode) "Add lyrics manually" else "Search lyrics",
                     style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
                     color = palette.onSurface,
                     modifier = Modifier.weight(1f),
                 )
+                if (manualMode) {
+                    Text(
+                        "Back",
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        color = palette.onSurfaceDim,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                manualMode = false
+                                manualError = null
+                            }
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 CloseButton(onClose, palette)
             }
 
             Spacer(Modifier.height(10.dp))
 
-            // Search field
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(palette.onSurface.copy(alpha = 0.06f))
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BasicTextField(
-                    value = query,
-                    onValueChange = {
-                        query = it
-                        invalidateSearch()
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
-                    textStyle = TextStyle(fontSize = 13.sp, color = palette.onSurface),
-                    cursorBrush = SolidColor(palette.accent),
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focusRequester),
-                    decorationBox = { inner ->
-                        Box {
-                            if (query.isEmpty()) {
-                                Text(
-                                    "Title, artist, or anything",
-                                    style = TextStyle(fontSize = 13.sp),
-                                    color = palette.onSurfaceDim,
-                                )
+            if (manualMode) {
+                ManualLyricsForm(
+                    targetTitle = targetTitle,
+                    targetArtist = targetArtist,
+                    hasTarget = hasTarget,
+                    text = manualText,
+                    onTextChange = { manualText = it },
+                    applying = manualApplying,
+                    error = manualError,
+                    onApply = {
+                        manualApplying = true
+                        manualError = null
+                        scope.launch {
+                            val error = onApplyManualText(manualText)
+                            manualApplying = false
+                            if (error == null) {
+                                manualMode = false
+                            } else {
+                                manualError = error
                             }
-                            inner()
                         }
                     },
                 )
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(palette.accent.copy(alpha = if (query.isBlank()) 0.35f else 0.22f))
-                        .clickable(enabled = query.isNotBlank()) { submitSearch() }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                ) {
-                    Text("Search", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = palette.onSurface)
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Provider filter chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ProviderChip(
-                    label = ManualSearch.ALL,
-                    color = palette.accent,
-                    selected = providerFilter == null,
-                    palette = palette,
-                ) {
-                    providerFilter = null
-                    invalidateSearch()
-                }
-                LyricsProviders.names.forEach { name ->
-                    ProviderChip(
-                        label = name,
-                        color = providerColor(name),
-                        selected = providerFilter == name,
-                        palette = palette,
-                    ) {
-                        providerFilter = name
-                        invalidateSearch()
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Dot: pink = synced lyrics, gray = plain text.",
-                style = TextStyle(fontSize = 10.sp),
-                color = palette.onSurfaceDim,
-            )
-            Spacer(Modifier.height(2.dp))
-
-            if (hasTarget) {
-                Text(
-                    text = "Applies to: ${targetTitle.ifBlank { "Unknown" }} — ${targetArtist.ifBlank { "Unknown" }}",
-                    style = TextStyle(fontSize = 11.sp),
-                    color = palette.onSurfaceDim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             } else {
-                Text(
-                    text = "Play a song in any media player, then pick lyrics for it here.",
-                    style = TextStyle(fontSize = 11.sp),
-                    color = palette.onSurfaceDim,
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            if (overrideApplied) {
+                // Search field
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(palette.accent.copy(alpha = 0.12f))
-                        .clickable(onClick = onClearOverride)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.onSurface.copy(alpha = 0.06f))
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        "Using your manual pick",
-                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                        color = palette.accent,
-                        modifier = Modifier.weight(1f),
+                    BasicTextField(
+                        value = query,
+                        onValueChange = {
+                            query = it
+                            invalidateSearch()
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
+                        textStyle = TextStyle(fontSize = 13.sp, color = palette.onSurface),
+                        cursorBrush = SolidColor(palette.accent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester),
+                        decorationBox = { inner ->
+                            Box {
+                                if (query.isEmpty()) {
+                                    Text(
+                                        "Title, artist, or anything",
+                                        style = TextStyle(fontSize = 13.sp),
+                                        color = palette.onSurfaceDim,
+                                    )
+                                }
+                                inner()
+                            }
+                        },
                     )
-                    Text(
-                        "Reset to auto",
-                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                        color = palette.onSurfaceDim,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-
-            when {
-                searching -> {
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "Searching…",
-                        style = TextStyle(fontSize = 12.sp),
-                        color = palette.onSurfaceDim,
-                    )
-                }
-                results != null && results!!.isEmpty() -> {
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "No results",
-                        style = TextStyle(fontSize = 12.sp),
-                        color = palette.onSurfaceDim,
-                    )
-                }
-                results != null -> {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(palette.accent.copy(alpha = if (query.isBlank()) 0.35f else 0.22f))
+                            .clickable(enabled = query.isNotBlank()) { submitSearch() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
-                        // Index-prefixed keys: providers return same-titled
-                        // rows (KuGou loves them), and a plain title key made
-                        // LazyColumn throw "Key was already used".
-                        itemsIndexed(
-                            results.orEmpty(),
-                            key = { index, result -> "$index-${result.provider}-${result.lrclibId ?: result.title}" },
-                        ) { index, result ->
-                            val rowKey = "$index-${result.provider}-${result.lrclibId ?: result.title}"
-                            SearchResultRow(
-                                result = result,
-                                pending = pendingKey == rowKey,
-                                failedReason = failedKey.takeIf { it == rowKey }?.let { failedReason },
-                                onClick = {
-                                    if (pendingKey == null) {
-                                        pendingKey = rowKey
-                                        failedKey = null
-                                        failedReason = null
-                                        scope.launch {
-                                            val error = onPick(result)
-                                            pendingKey = null
-                                            if (error != null) {
-                                                failedKey = rowKey
-                                                failedReason = error
-                                            }
-                                        }
-                                    }
-                                },
-                            )
+                        Text("Search", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = palette.onSurface)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    // Metrolist's search-online: the browser looks up "<query> lyrics".
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(palette.onSurface.copy(alpha = if (query.isBlank()) 0.04f else 0.06f))
+                            .clickable(enabled = query.isNotBlank()) { onSearchWeb(query) }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text("Web", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = palette.onSurface)
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Provider filter chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    ProviderChip(
+                        label = ManualSearch.ALL,
+                        color = palette.accent,
+                        selected = providerFilter == null,
+                        palette = palette,
+                    ) {
+                        providerFilter = null
+                        invalidateSearch()
+                    }
+                    LyricsProviders.names.forEach { name ->
+                        ProviderChip(
+                            label = name,
+                            color = providerColor(name),
+                            selected = providerFilter == name,
+                            palette = palette,
+                        ) {
+                            providerFilter = name
+                            invalidateSearch()
                         }
                     }
                 }
-                else -> {
-                    Spacer(Modifier.height(16.dp))
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Dot: pink = synced lyrics, gray = plain text.",
+                    style = TextStyle(fontSize = 10.sp),
+                    color = palette.onSurfaceDim,
+                )
+                Spacer(Modifier.height(2.dp))
+
+                if (hasTarget) {
                     Text(
-                        "Enter a song title, then press Enter or Search.",
-                        style = TextStyle(fontSize = 12.sp),
+                        text = "Applies to: ${targetTitle.ifBlank { "Unknown" }} — ${targetArtist.ifBlank { "Unknown" }}",
+                        style = TextStyle(fontSize = 11.sp),
+                        color = palette.onSurfaceDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Text(
+                        text = "Play a song in any media player, then pick lyrics for it here.",
+                        style = TextStyle(fontSize = 11.sp),
                         color = palette.onSurfaceDim,
                     )
                 }
+
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(palette.onSurface.copy(alpha = 0.06f))
+                        .clickable { manualMode = true }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
+                    Text(
+                        "Add lyrics manually",
+                        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                        color = palette.onSurfaceDim,
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                if (overrideApplied) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(palette.accent.copy(alpha = 0.12f))
+                            .clickable(onClick = onClearOverride)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Using your manual pick",
+                            style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                            color = palette.accent,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            "Reset to auto",
+                            style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                            color = palette.onSurfaceDim,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                when {
+                    searching -> {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Searching…",
+                            style = TextStyle(fontSize = 12.sp),
+                            color = palette.onSurfaceDim,
+                        )
+                    }
+                    results != null && results!!.isEmpty() -> {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "No results",
+                            style = TextStyle(fontSize = 12.sp),
+                            color = palette.onSurfaceDim,
+                        )
+                    }
+                    results != null -> {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            // Index-prefixed keys: providers return same-titled
+                            // rows (KuGou loves them), and a plain title key made
+                            // LazyColumn throw "Key was already used".
+                            itemsIndexed(
+                                results.orEmpty(),
+                                key = { index, result -> "$index-${result.provider}-${result.lrclibId ?: result.title}" },
+                            ) { index, result ->
+                                val rowKey = "$index-${result.provider}-${result.lrclibId ?: result.title}"
+                                SearchResultRow(
+                                    result = result,
+                                    pending = pendingKey == rowKey,
+                                    failedReason = failedKey.takeIf { it == rowKey }?.let { failedReason },
+                                    onClick = {
+                                        if (pendingKey == null) {
+                                            pendingKey = rowKey
+                                            failedKey = null
+                                            failedReason = null
+                                            scope.launch {
+                                                val error = onPick(result)
+                                                pendingKey = null
+                                                if (error != null) {
+                                                    failedKey = rowKey
+                                                    failedReason = error
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Enter a song title, then press Enter or Search.",
+                            style = TextStyle(fontSize = 12.sp),
+                            color = palette.onSurfaceDim,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The paste-in editor of the manual-entry page: multiline field prefilled
+ * with the current lyrics, applies to the playing track on demand.
+ */
+@Composable
+private fun ManualLyricsForm(
+    targetTitle: String,
+    targetArtist: String,
+    hasTarget: Boolean,
+    text: String,
+    onTextChange: (String) -> Unit,
+    applying: Boolean,
+    error: String?,
+    onApply: () -> Unit,
+) {
+    val palette = LocalAppPalette.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = if (hasTarget) {
+                "Applies to: ${targetTitle.ifBlank { "Unknown" }} — ${targetArtist.ifBlank { "Unknown" }}"
+            } else {
+                "Play a song in any media player, then apply lyrics to it here."
+            },
+            style = TextStyle(fontSize = 11.sp),
+            color = palette.onSurfaceDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(palette.onSurface.copy(alpha = 0.06f))
+                .padding(10.dp),
+        ) {
+            BasicTextField(
+                value = text,
+                onValueChange = onTextChange,
+                textStyle = TextStyle(fontSize = 12.sp, color = palette.onSurface),
+                cursorBrush = SolidColor(palette.accent),
+                modifier = Modifier.fillMaxSize(),
+                decorationBox = { inner ->
+                    Box {
+                        if (text.isEmpty()) {
+                            Text(
+                                "Paste lyrics here — plain text or LRC with [mm:ss.xx] timestamps.",
+                                style = TextStyle(fontSize = 12.sp),
+                                color = palette.onSurfaceDim,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+        }
+
+        error?.let { message ->
+            Spacer(Modifier.height(6.dp))
+            Text(
+                message,
+                style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                color = Color(0xFFF87171),
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            val applyEnabled = hasTarget && text.isNotBlank() && !applying
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(palette.accent.copy(alpha = if (applyEnabled) 0.22f else 0.10f))
+                    .clickable(enabled = applyEnabled, onClick = onApply)
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    if (applying) "Applying…" else "Apply",
+                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                    color = palette.onSurface,
+                )
             }
         }
     }

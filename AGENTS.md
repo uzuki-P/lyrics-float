@@ -33,6 +33,10 @@ file under `$XDG_CONFIG_HOME/lyricsfloat/state.properties`.
   code when you finish or start a step.
 - Tests live in `src/test/kotlin/`, run with `just test` (or
   `./gradlew test`). Build with `just build`, dev-run with `just dev`.
+  `just install` copies the newest AppImage to `~/apps/lyrics-float.AppImage`
+  (stable name) and registers the KDE/vicinae launcher entry
+  (`scripts/install-appimage`, `--uninstall` to remove). `just update` builds,
+  stages a dated `_apk/` copy, and installs in one command.
 
 ## Conventions
 
@@ -42,3 +46,6 @@ file under `$XDG_CONFIG_HOME/lyricsfloat/state.properties`.
   one (lrclib.net requires it).
 - Extended LRC is the canonical lyrics format providers must serialize into
   (see `docs/plan.md` section 3 for the exact shape).
+- Song lyrics often use kanji and kana combinations with readings that a
+  character-by-character romaji conversion gets wrong. Add phrase-level romaji
+  fixes for these cases, such as 一人 → `hitori`.

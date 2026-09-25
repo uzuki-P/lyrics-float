@@ -54,6 +54,8 @@ class LyricsRepository(private val scope: CoroutineScope) {
         val title: String? = null,
         val artist: String? = null,
         val durationMs: Long? = null,
+        /** Hand-entered lyrics (Metrolist's "Manual" provider); stored verbatim. */
+        val text: String? = null,
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -204,6 +206,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
             if (text != null) OverrideFetch(text, null)
             else OverrideFetch(null, "Lrclib: track not found")
         }
+        entry.text != null -> OverrideFetch(entry.text, null)
         entry.provider != null -> {
             val provider = LyricsProviders.byName(entry.provider)
             if (provider == null) {
@@ -309,6 +312,38 @@ class LyricsRepository(private val scope: CoroutineScope) {
         currentInternal.value = state
         startRomanization(state)
         return fetched.error
+    }
+
+    /**
+     * Applies hand-entered lyrics (plain text or LRC) to the playing track,
+     * Metrolist's Edit action: stored verbatim as a "Manual" provider override,
+     * so it survives restarts and "Reset to auto" clears it like any pick.
+     * Returns null on success, or the failure reason.
+     */
+    suspend fun applyManualText(text: String, playingTrack: TrackInfo?): String? {
+        val track = playingTrack?.takeIf(TrackInfo::hasContent) ?: return "Nothing is playing"
+        val cleaned = text.trim()
+        if (cleaned.isEmpty()) return "Lyrics are empty"
+        val key = keyFor(track)
+        trackInfoByKey[key] = track
+        overrides[key] = OverrideEntry(provider = "Manual", text = cleaned)
+        saveOverrides()
+        withContext(Dispatchers.IO) { diskCache.remove(track) }
+        loadJob?.cancel()
+        overrideTargetKey = key
+        // No fetch to wait on, so the parsed text shows immediately.
+        val state = toState(track, key, cleaned, "Manual", fromOverride = true)
+        withContext(Dispatchers.IO) { diskCache.write(track, cleaned, "Manual", true) }
+        loadingInternal.value = false
+        cache[key] = state
+        currentInternal.value = state
+        startRomanization(state)
+        return null
+    }
+
+    /** Raw lyrics text for the current track, for the manual-edit form's prefill. */
+    suspend fun currentRawLyrics(): String? = trackInfoByKey[overrideTargetKey]?.let { track ->
+        withContext(Dispatchers.IO) { diskCache.read(track) }?.text
     }
 
     /** Removes the manual pick for the current track; the automatic lookup takes over. */

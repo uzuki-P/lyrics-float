@@ -37,6 +37,12 @@ object JapaneseRomaji {
         "部屋" to "ヘヤ",
         "眼鏡" to "メガネ",
         "八百屋" to "ヤオヤ",
+        // Small-vowel spellings often mark sung vowel extensions in lyrics.
+        "あぁ" to "アア",
+        "いぃ" to "イイ",
+        "うぅ" to "ウウ",
+        "えぇ" to "エエ",
+        "おぉ" to "オオ",
     )
 
     fun isJapanese(text: String): Boolean = text.any { char ->

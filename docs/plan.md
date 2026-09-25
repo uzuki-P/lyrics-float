@@ -254,3 +254,47 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Measure the full lyric stack with unbounded height and top alignment.
       The viewport-sized stack lost offscreen line heights, and Compose's
       default center alignment shifted the measured stack offscreen.
+
+## 19. Manual lyrics entry + web search (Metrolist LyricsMenu port)
+
+- [x] "Add lyrics manually" form in the search dialog: multiline editor
+      prefilled with the current lyrics (raw disk-cache text), plain text or
+      LRC; Apply stores it verbatim as a "Manual" provider override on the
+      playing track (persisted in the overrides file + disk cache), the pill
+      updates live, and "Reset to auto" clears it like any pick.
+- [x] "Web" button next to Search opens the browser at `<query> lyrics`
+      (Metrolist's search-online action), for copy-paste into the manual
+      form.
+
+## 20. Launcher install (stable name + desktop entry)
+
+- [x] `just install`: builds the AppImage and installs it as
+      `~/apps/lyrics-float.AppImage` (stable name; temp-copy + rename so a
+      running instance is never corrupted), plus a
+      `~/.local/share/applications` desktop entry and hicolor icon, so KDE
+      kicker/KRunner and vicinae start it by name no matter how the dated
+      build file names change. `scripts/install-appimage --uninstall`
+      (or `just uninstall`) removes all three.
+- [x] `just update` = `build-appimage` + `install`: dated `_apk/` staging
+      copy plus the stable-name install in one command; `packageAppImageFile`
+      now tracks the jpackage bundle as its input so the combined flow does
+      not repackage twice.
+- [x] Icon fix: the installer downsizes the art to a real 512x512
+      (ImageMagick when present) instead of dropping the 1254px original into
+      the sized dir, and refreshes KSycoca + the GTK icon cache so KDE and
+      vicinae pick up the entry and icon immediately.
+
+## 21. Click pass-through toggle
+
+- [x] Click pass-through for the pill via the X Shape extension
+      (`LinuxClickThrough`, libXext through JNA): the input region shrinks to
+      a 40 dp strip along the top so every other click falls through
+      XWayland to the windows below, while the hover header - and its
+      "Pass-through: on/off" action - stays reachable for toggling back.
+      Re-applied on window resize and when the overlay is re-shown (a hidden
+      window has no XID to shape).
+- [x] Toggle reachable from three places: the settings Overlay section
+      (persisted as `behavior.clickPassThrough`), the pill's hover header,
+      and the tray right-click menu as a dbusmenu checkmark item whose state
+      is re-read on every open (root AboutToShow bumps the revision or Qt's
+      importer drops the refresh).

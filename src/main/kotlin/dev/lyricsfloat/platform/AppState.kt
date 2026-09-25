@@ -126,6 +126,11 @@ object AppState {
 
     fun saveAutoHide(autoHide: Boolean) = writeField("behavior.autoHide", autoHide.toString())
 
+    /** Clicks fall through the pill except for the top hover strip. */
+    fun loadClickPassThrough(): Boolean = readField("behavior.clickPassThrough") == "true"
+
+    fun saveClickPassThrough(value: Boolean) = writeField("behavior.clickPassThrough", value.toString())
+
     fun loadPreferredPlayer(): String? = readField("players.preferred")?.takeIf { it.isNotBlank() }
 
     fun savePreferredPlayer(identity: String?) {

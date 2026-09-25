@@ -154,6 +154,7 @@ private const val MENU_TOGGLE = 1
 private const val MENU_SEARCH = 3
 private const val MENU_SETTINGS = 4
 private const val MENU_QUIT = 6
+private const val MENU_PASS_THROUGH = 7
 
 /**
  * StatusNotifierItem tray for Plasma/Freedesktop shells over the session bus.
@@ -163,6 +164,8 @@ class LinuxSniTray(
     private val onToggleOverlay: () -> Unit,
     private val onSearch: () -> Unit,
     private val onSettings: () -> Unit,
+    private val onToggleClickPassThrough: () -> Unit,
+    private val clickPassThroughEnabled: () -> Boolean,
     private val onQuit: () -> Unit,
 ) {
     private var connection: DBusConnection? = null
@@ -228,6 +231,7 @@ class LinuxSniTray(
         MenuLayout(2, mapOf("type" to Variant("separator")), emptyList()),
         MenuLayout(MENU_SEARCH, itemProps("Search lyrics", "edit-find"), emptyList()),
         MenuLayout(MENU_SETTINGS, itemProps("Settings", "preferences-system"), emptyList()),
+        MenuLayout(MENU_PASS_THROUGH, passThroughProps(), emptyList()),
         MenuLayout(5, mapOf("type" to Variant("separator")), emptyList()),
         MenuLayout(MENU_QUIT, itemProps("Quit", "application-exit"), emptyList()),
     )
@@ -242,6 +246,15 @@ class LinuxSniTray(
         }
         return props
     }
+
+    // dbusmenu checkmark toggle; the state is read on every menu open so the
+    // checkmark follows toggles made from the settings window.
+    private fun passThroughProps(): Map<String, Variant<Any?>> = linkedMapOf(
+        "label" to Variant("Click pass-through"),
+        "enabled" to Variant(true),
+        "toggle-type" to Variant("checkmark"),
+        "toggle-state" to Variant(if (clickPassThroughEnabled()) 1 else 0),
+    )
 
     private fun rootLayout(depth: Int): MenuLayout {
         return MenuLayout(
@@ -298,6 +311,7 @@ class LinuxSniTray(
                     MENU_TOGGLE -> itemProps("Show / Hide lyrics", "view-form-text")
                     MENU_SEARCH -> itemProps("Search lyrics", "edit-find")
                     MENU_SETTINGS -> itemProps("Settings", "preferences-system")
+                    MENU_PASS_THROUGH -> passThroughProps()
                     MENU_QUIT -> itemProps("Quit", "application-exit")
                     else -> emptyMap()
                 }
@@ -305,7 +319,16 @@ class LinuxSniTray(
             }
         }
 
-        override fun AboutToShow(id: Int) = false
+        // Root always reports changes on open so Plasma refetches the layout;
+        // the revision must move or Qt's importer silently drops the update,
+        // leaving the pass-through checkmark stale.
+        override fun AboutToShow(id: Int): Boolean {
+            if (id == 0) {
+                revision.incrementAndGet()
+                return true
+            }
+            return false
+        }
 
         override fun Event(id: Int, eventId: String, data: Variant<Any?>, timestamp: UInt32) {
             if (eventId != "clicked") return
@@ -313,6 +336,7 @@ class LinuxSniTray(
                 MENU_TOGGLE -> onToggleOverlay()
                 MENU_SEARCH -> onSearch()
                 MENU_SETTINGS -> onSettings()
+                MENU_PASS_THROUGH -> onToggleClickPassThrough()
                 MENU_QUIT -> onQuit()
             }
         }

@@ -19,6 +19,20 @@ build:
 build-appimage:
     ./gradlew stageAppImage
 
+# Build the AppImage and install it to ~/apps with a desktop entry, so
+# KDE/vicinae launchers can start it by name regardless of build file names.
+install:
+    ./gradlew packageAppImageFile
+    scripts/install-appimage
+
+# Remove the installed AppImage, desktop entry and icon.
+uninstall:
+    scripts/install-appimage --uninstall
+
+# One-shot release flow: build, stage a dated copy in _apk/, refresh the
+# ~/apps install and the KDE/vicinae menu entry.
+update: build-appimage install
+
 # Run the packaged app. LD_LIBRARY_PATH is scrubbed because terminals spawned
 # from AppImage-hosted editors (e.g. T3 Code) inject their mount's lib dir,
 # which makes the Compose native launcher segfault in setenv at JVM startup.

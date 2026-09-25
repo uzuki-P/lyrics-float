@@ -81,6 +81,12 @@ tasks.register("packageAppImageFile") {
     val toolFile = File(System.getProperty("user.home"), ".cache/lyrics-float/tools/appimagetool-x86_64.AppImage")
     val iconFile = layout.projectDirectory.file("src/main/resources/icons/lyrics-float-v2.png")
     val appVersion = project.version.toString()
+    val outputFile = outputDir.get().file("lyrics-float-$appVersion.AppImage")
+
+    // Track the jpackage bundle so repeat runs (just install/update) skip the
+    // appimagetool repackage when nothing was rebuilt.
+    inputs.dir(appBundle)
+    outputs.file(outputFile)
 
     doLast {
         if (!toolFile.exists()) {
@@ -107,7 +113,7 @@ tasks.register("packageAppImageFile") {
         )
         iconFile.asFile.copyTo(File(directory, "lyrics-float.png"), overwrite = true)
 
-        val output = outputDir.get().file("lyrics-float-$appVersion.AppImage").asFile
+        val output = outputFile.asFile
         output.parentFile.mkdirs()
         if (output.exists()) check(output.delete()) { "Could not replace $output" }
         val packageProcess = ProcessBuilder(

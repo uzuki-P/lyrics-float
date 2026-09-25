@@ -32,6 +32,7 @@ import dev.lyricsfloat.lyrics.LyricsRepository
 import dev.lyricsfloat.mpris.NowPlayingMonitor
 import dev.lyricsfloat.platform.AppState
 import dev.lyricsfloat.platform.Autostart
+import dev.lyricsfloat.platform.LinuxClickThrough
 import dev.lyricsfloat.platform.LinuxSniTray
 import dev.lyricsfloat.platform.LinuxWindowMover
 import dev.lyricsfloat.platform.WindowAnchor
@@ -77,6 +78,7 @@ fun main() = application {
     var showNextLine by remember { mutableStateOf(AppState.loadShowNextLine()) }
     var offsetMs by remember { mutableStateOf(AppState.loadOffsetMs()) }
     var autoHide by remember { mutableStateOf(AppState.loadAutoHide()) }
+    var clickPassThrough by remember { mutableStateOf(AppState.loadClickPassThrough()) }
     var preferredPlayer by remember { mutableStateOf(AppState.loadPreferredPlayer()) }
     var overlayAnchor by remember { mutableStateOf(AppState.loadOverlayAnchor()) }
     var showIntervalIndicator by remember { mutableStateOf(AppState.loadShowIntervalIndicator()) }
@@ -103,6 +105,7 @@ fun main() = application {
         // Load JNA's native side before the first drag so the window does not
         // lag behind the cursor.
         scope.launch(Dispatchers.IO) { LinuxWindowMover.warmUp() }
+        scope.launch(Dispatchers.IO) { LinuxClickThrough.warmUp() }
         scope.launch(Dispatchers.IO) { Autostart.refresh() }
     }
     LaunchedEffect(preferredPlayer) {
@@ -114,11 +117,17 @@ fun main() = application {
     val overlayShown = overlayVisible && (!playbackGone || !autoHide)
     val quit = { exitApplication() }
 
+    val toggleClickPassThrough = {
+        clickPassThrough = !clickPassThrough
+        AppState.saveClickPassThrough(clickPassThrough)
+    }
     DisposableEffect(Unit) {
         val tray = LinuxSniTray(
             onToggleOverlay = { overlayVisible = !overlayVisible },
             onSearch = { searchVisible = true },
             onSettings = { settingsVisible = true },
+            onToggleClickPassThrough = toggleClickPassThrough,
+            clickPassThroughEnabled = { clickPassThrough },
             onQuit = quit,
         )
         tray.start()
@@ -162,6 +171,27 @@ fun main() = application {
                 with(density) { AppState.MIN_HEIGHT_DP.dp.roundToPx() },
             )
             onDispose { window.minimumSize = Dimension(0, 0) }
+        }
+
+        // Click pass-through: strip the X input region down to the top hover
+        // strip so XWayland hands every other click to the windows below.
+        // Keyed on overlayShown because a hidden window has no XID to shape
+        // yet. Re-applied on resize since the strip rectangle is measured in
+        // window pixels.
+        val passThroughStripPx = with(density) { 40.dp.roundToPx() }
+        DisposableEffect(clickPassThrough, overlayShown) {
+            fun applyShape() {
+                LinuxClickThrough.apply(window, clickPassThrough, passThroughStripPx)
+            }
+            applyShape()
+            val listener = object : ComponentAdapter() {
+                override fun componentResized(e: ComponentEvent) = applyShape()
+            }
+            window.addComponentListener(listener)
+            onDispose {
+                window.removeComponentListener(listener)
+                LinuxClickThrough.apply(window, false, passThroughStripPx)
+            }
         }
 
         // Mapping-time placement: keep overriding for a few frames because
@@ -245,8 +275,10 @@ fun main() = application {
                 textPosition = textPosition,
                 textOutline = textOutline,
                 autoScroll = autoScroll,
+                clickPassThrough = clickPassThrough,
                 onSearch = { searchVisible = true },
                 onSettings = { settingsVisible = true },
+                onToggleClickPassThrough = toggleClickPassThrough,
                 onDragStart = {
                     // setLocation dragging jitters under XWayland; the WM's own
                     // move tracks the pointer per-frame, so prefer it there.
@@ -368,6 +400,9 @@ fun main() = application {
                     ).joinToString(" ")
                 }.orEmpty(),
                 onPick = { result -> repository.applyManualPick(result, monitor.active.value?.track) },
+                onApplyManualText = { text -> repository.applyManualText(text, monitor.active.value?.track) },
+                currentLyricsText = { repository.currentRawLyrics() },
+                onSearchWeb = ::openLyricsWebSearch,
                 onClearOverride = repository::clearOverride,
                 onClose = { searchVisible = false },
                 search = { query, provider -> repository.search(query, provider) },
@@ -445,6 +480,11 @@ fun main() = application {
                     autoHide = value
                     AppState.saveAutoHide(value)
                 },
+                clickPassThrough = clickPassThrough,
+                onClickPassThroughChange = { value ->
+                    clickPassThrough = value
+                    AppState.saveClickPassThrough(value)
+                },
                 anchor = overlayAnchor,
                 onAnchorChange = { anchor ->
                     overlayAnchor = anchor
@@ -515,6 +555,19 @@ private fun TransparentWindowBackground(window: java.awt.Window) {
         window.background = java.awt.Color(0, 0, 0, 0)
         onDispose { window.background = old }
     }
+}
+
+/**
+ * Metrolist's "search online": open the desktop browser at
+ * "<query> lyrics" so the found text can be pasted into the manual form.
+ */
+private fun openLyricsWebSearch(query: String) {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return
+    val url = "https://www.google.com/search?q=" +
+        java.net.URLEncoder.encode("$trimmed lyrics", Charsets.UTF_8)
+    val opened = runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }.isSuccess
+    if (!opened) runCatching { ProcessBuilder("xdg-open", url).start() }
 }
 
 /**

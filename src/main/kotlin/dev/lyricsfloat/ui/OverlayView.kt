@@ -205,8 +205,10 @@ fun OverlayView(
     textPosition: LyricsTextPosition,
     textOutline: Boolean,
     autoScroll: Boolean,
+    clickPassThrough: Boolean,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onToggleClickPassThrough: () -> Unit,
     onDragStart: () -> Unit,
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: () -> Unit,
@@ -324,6 +326,10 @@ fun OverlayView(
                         )
                         OverlayAction("Search", onSearch)
                         OverlayAction("Settings", onSettings)
+                        OverlayAction(
+                            label = if (clickPassThrough) "Pass-through: on" else "Pass-through: off",
+                            onClick = onToggleClickPassThrough,
+                        )
                     }
                 }
 

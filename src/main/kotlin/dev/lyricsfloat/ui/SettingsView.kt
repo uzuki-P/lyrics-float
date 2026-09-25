@@ -84,6 +84,8 @@ fun SettingsView(
     onOffsetChange: (Long) -> Unit,
     autoHide: Boolean,
     onAutoHideChange: (Boolean) -> Unit,
+    clickPassThrough: Boolean,
+    onClickPassThroughChange: (Boolean) -> Unit,
     anchor: WindowAnchor,
     onAnchorChange: (WindowAnchor) -> Unit,
     preferredPlayer: String?,
@@ -282,6 +284,12 @@ fun SettingsView(
                 )
                 ToggleRow("Show surrounding lines", showNextLine, onShowNextLineChange, palette)
                 ToggleRow("Hide when nothing is playing", autoHide, onAutoHideChange, palette)
+                ToggleRow("Click pass-through", clickPassThrough, onClickPassThroughChange, palette)
+                Text(
+                    "Clicks fall through the pill to the windows below; the top hover strip stays active so you can turn this off.",
+                    style = TextStyle(fontSize = 11.sp),
+                    color = palette.onSurfaceDim,
+                )
                 ToggleRow("Start on login", autostartEnabled, { enabled ->
                     autostartError = !Autostart.setEnabled(enabled)
                     autostartEnabled = Autostart.isEnabled()
