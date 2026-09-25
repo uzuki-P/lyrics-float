@@ -41,8 +41,8 @@ private const val YX_BANDED = 3
  * Click pass-through for the lyrics pill, via the X Shape extension: a
  * stripped-down input region makes XWayland deliver clicks on the rest of the
  * pill to the windows below (KWin forwards them to the Wayland surface
- * underneath). A narrow strip beside the hover menu keeps its input shape so the
- * hover header - and its pass-through action - stays reachable.
+ * underneath). Pass-through removes the entire input region, including the
+ * hover menu.
  */
 object LinuxClickThrough {
     private val lock = Any()
@@ -59,23 +59,16 @@ object LinuxClickThrough {
     }
 
     /**
-     * Shapes the window's input region. With [passThrough] on, only the menu
-     * [rescueStripPx] remain interactive; with it off, the input shape is
-     * removed entirely (mask None + ShapeSet restores the default region).
+     * Shapes the window's input region. With [passThrough] on, the region is
+     * empty; with it off, the input shape is removed (mask None + ShapeSet
+     * restores the default region).
      */
-    fun apply(window: Window, passThrough: Boolean, rescueStripPx: Int, menuAtBottom: Boolean = false) {
+    fun apply(window: Window, passThrough: Boolean) {
         try {
             val (link, conn) = connection() ?: return
             val target = X11.Window(Native.getWindowID(window))
             if (passThrough) {
-                val strip = X11.XRectangle(
-                    0,
-                    (if (menuAtBottom) (window.height - rescueStripPx).coerceAtLeast(0) else 0)
-                        .coerceAtMost(Short.MAX_VALUE.toInt()).toShort(),
-                    window.width.coerceAtMost(Short.MAX_VALUE.toInt()).toShort(),
-                    rescueStripPx.coerceAtMost(Short.MAX_VALUE.toInt()).toShort(),
-                )
-                link.XShapeCombineRectangles(conn, target, SHAPE_INPUT, 0, 0, strip, 1, SHAPE_SET, YX_BANDED)
+                link.XShapeCombineRectangles(conn, target, SHAPE_INPUT, 0, 0, null, 0, SHAPE_SET, YX_BANDED)
             } else {
                 link.XShapeCombineMask(conn, target, SHAPE_INPUT, 0, 0, null, SHAPE_SET)
             }

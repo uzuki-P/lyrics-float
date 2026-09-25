@@ -111,6 +111,7 @@ fun SettingsView(
     enabledProviders: Set<String>,
     onProviderEnabledChange: (String, Boolean) -> Unit,
     onClose: () -> Unit,
+    dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalAppPalette.current
@@ -130,7 +131,10 @@ fun SettingsView(
                 .background(palette.surface)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = dragHandleModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     "Settings",
                     style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
@@ -300,7 +304,7 @@ fun SettingsView(
                     )
                 }
                 Text(
-                    "Clicks fall through the pill to the windows below; the hover menu stays active so you can turn this off.",
+                    "The pill ignores pointer input, including its hover menu. Turn this off from the tray menu.",
                     style = TextStyle(fontSize = 11.sp),
                     color = palette.onSurfaceDim,
                 )

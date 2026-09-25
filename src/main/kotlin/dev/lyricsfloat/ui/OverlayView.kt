@@ -382,7 +382,9 @@ fun OverlayView(
                     .padding(horizontal = 18.dp, vertical = 10.dp),
             ) {
                 // The menu also acts as a move handle while lyrics occupy the pill.
-                if (hoverMenuPosition == HoverMenuPosition.TOP) AnimatedVisibility(visible = hovered) {
+                if (hoverMenuPosition == HoverMenuPosition.TOP) AnimatedVisibility(
+                    visible = hovered && !clickPassThrough,
+                ) {
                     HoverMenu(playback, palette, onDragStart, onDrag, onDragEnd, onSearch, onSettings,
                         clickPassThrough, onToggleClickPassThrough)
                 }
@@ -421,7 +423,9 @@ fun OverlayView(
                         )
                     }
                 }
-                if (hoverMenuPosition == HoverMenuPosition.BOTTOM) AnimatedVisibility(visible = hovered) {
+                if (hoverMenuPosition == HoverMenuPosition.BOTTOM) AnimatedVisibility(
+                    visible = hovered && !clickPassThrough,
+                ) {
                     HoverMenu(playback, palette, onDragStart, onDrag, onDragEnd, onSearch, onSettings,
                         clickPassThrough, onToggleClickPassThrough)
                 }

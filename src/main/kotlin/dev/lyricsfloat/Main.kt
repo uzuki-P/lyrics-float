@@ -3,6 +3,7 @@
 package dev.lyricsfloat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -180,25 +182,16 @@ fun main() = application {
             onDispose { window.minimumSize = Dimension(0, 0) }
         }
 
-        // Click pass-through: strip the X input region down to the hover menu
-        // strip so XWayland hands every other click to the windows below.
-        // Keyed on overlayShown because a hidden window has no XID to shape
-        // yet. Re-applied on resize since the strip rectangle is measured in
-        // window pixels.
-        val passThroughStripPx = with(density) { 48.dp.roundToPx() }
-        DisposableEffect(clickPassThrough, overlayShown, hoverMenuPosition) {
+        // Click pass-through removes the overlay's entire input region so
+        // XWayland sends pointer events to the windows below. Keyed on
+        // overlayShown because a hidden window has no XID to shape yet.
+        DisposableEffect(clickPassThrough, overlayShown) {
             fun applyShape() {
-                LinuxClickThrough.apply(window, clickPassThrough, passThroughStripPx,
-                    hoverMenuPosition == HoverMenuPosition.BOTTOM)
+                LinuxClickThrough.apply(window, clickPassThrough)
             }
             applyShape()
-            val listener = object : ComponentAdapter() {
-                override fun componentResized(e: ComponentEvent) = applyShape()
-            }
-            window.addComponentListener(listener)
             onDispose {
-                window.removeComponentListener(listener)
-                LinuxClickThrough.apply(window, false, passThroughStripPx)
+                LinuxClickThrough.apply(window, false)
             }
         }
 
@@ -420,6 +413,7 @@ fun main() = application {
                     onClearOverride = repository::clearOverride,
                     onClose = { searchVisible = false },
                     search = { query, provider -> repository.search(query, provider) },
+                    dragHandleModifier = Modifier.windowDragHandle(window),
                 )
                 DialogResizeZones(window)
             }
@@ -569,11 +563,19 @@ fun main() = application {
                         LyricsProviders.setEnabled(next)
                     },
                     onClose = { settingsVisible = false },
+                    dragHandleModifier = Modifier.windowDragHandle(window),
                 )
                 DialogResizeZones(window)
             }
         }
     }
+}
+
+private fun Modifier.windowDragHandle(window: java.awt.Window): Modifier = pointerInput(window) {
+    detectDragGestures(
+        onDragStart = { LinuxWindowMover.requestInteractiveMove(window) },
+        onDrag = { change, _ -> change.consume() },
+    )
 }
 
 @Composable

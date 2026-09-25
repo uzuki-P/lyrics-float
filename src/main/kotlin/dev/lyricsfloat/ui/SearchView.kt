@@ -102,6 +102,7 @@ fun SearchView(
     onClearOverride: () -> Unit,
     onClose: () -> Unit,
     search: suspend (String, String?) -> List<ManualSearchResult>,
+    dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalAppPalette.current
@@ -219,7 +220,10 @@ fun SearchView(
                 .background(palette.surface)
                 .padding(16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = dragHandleModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     if (manualMode) "Add lyrics manually" else "Search lyrics",
                     style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
