@@ -322,3 +322,54 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
       click pass-through input strip with it.
 - [x] Resize the settings and search windows from every edge and corner with
       invisible targets and matching resize cursors, like the lyrics overlay.
+
+## 24. UI/UX refactor
+
+- [x] `AppSettings` holds every preference as Compose state and writes it
+      through to `AppState` on assignment; `Main.kt` no longer pairs ~20
+      state vars with manual save calls.
+- [x] Shared component kit (`ui/Components.kt`, `ui/AppIcons.kt`): icon
+      buttons with tooltips, buttons, chips, segmented controls, setting
+      rows, text field, inline messages, and the dialog frame. Hand cursors
+      and hover states on every clickable.
+- [x] One drag/resize helper (`ui/WindowChrome.kt`) for the overlay and both
+      dialogs; dialogs share a `FloatingDialog` wrapper and close on Escape.
+- [x] Overlay: the hover bar floats over the lyrics (no layout jump), shows
+      title/artist, a drag grip and icon actions; centered hint states with a
+      "Search lyrics" action when nothing was found; Sync moves away from
+      the hover bar's edge.
+- [x] Settings: Lyrics / Overlay / Sources tabs, grouped cards with short
+      descriptions, a screen-shaped anchor picker, "Snap to anchor".
+- [x] Search: clear button, explicit "Use" per result (row click opens the
+      preview), Applied / Retry states, empty and loading placeholders,
+      result count, Cancel/Apply in the manual editor.
+
+## 25. Lyrics motion pass
+
+- [x] Lyrics rendering moved to `ui/LyricsViewport.kt`.
+- [x] Lines lay out at the active size; out-of-focus lines shrink through a
+      graphics layer (0.74x, the old context font ratio) on an underdamped
+      spring, so focus changes grow/shrink instead of jumping between font
+      sizes. Dimming animates (350 ms); lines two or more away from the
+      active one get a depth blur that clears during manual scroll.
+- [x] Auto-scroll runs one clock per line (700 ms, decelerating curve) and
+      staggers lines below the focus by 32 ms each, so line changes ripple
+      down the stack. Scroll targets use settled heights, so the spring does
+      not retarget the scroll mid-flight.
+- [x] Manual scroll starts from the displayed position and Sync resumes from
+      the manual position (both used to jump).
+- [x] Karaoke after Metrolist's WordLevelLyrics: soft-edged gradient wipe per
+      word, a small pop when a word starts, sung words stay slightly raised,
+      held notes glow in the accent color. Words are drawn from per-line
+      segment layouts, so wrapped lines and the outline mode still work.
+
+## 26. Per-song timing
+
+- [x] `SongOffsets` stores a per-song offset (keyed like manual picks,
+      `lyrics.songOffsets` JSON in the state file) that adds on top of the
+      global offset. Global and per-song offsets clamp to ±60 s (was ±10 s);
+      the Settings slider covers ±10 s.
+- [x] "Lyrics timing" dialog: large live value, Later/Earlier nudges
+      (50 ms / 100 ms / 1 s), ±10 s slider, exact entry in ms or seconds,
+      live "now showing" line, reset. Opened from the hover bar (timer icon,
+      highlighted when the song has an offset), the tray menu and Settings.

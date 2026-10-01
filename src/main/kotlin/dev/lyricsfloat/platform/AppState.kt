@@ -1,5 +1,6 @@
 package dev.lyricsfloat.platform
 
+import dev.lyricsfloat.lyrics.SongOffsets
 import dev.lyricsfloat.ui.ThemeMode
 import dev.lyricsfloat.ui.HoverMenuPosition
 import java.io.File
@@ -88,10 +89,14 @@ object AppState {
 
     fun saveShowNextLine(show: Boolean) = writeField("overlay.showNext", show.toString())
 
-    /** Lyrics sync offset in milliseconds; positive shows lines earlier. */
-    fun loadOffsetMs(): Long = readField("lyrics.offsetMs")?.toLongOrNull()?.takeIf { it in -10_000..10_000 } ?: 0L
+    /**
+     * Global lyrics sync offset in milliseconds; positive shows lines earlier.
+     * Per-song offsets (SongOffsets) add on top. Clamped to ±60 s.
+     */
+    fun loadOffsetMs(): Long = readField("lyrics.offsetMs")?.toLongOrNull()
+        ?.takeIf { it in -SongOffsets.MAX_MS..SongOffsets.MAX_MS } ?: 0L
 
-    fun saveOffsetMs(offset: Long) = writeField("lyrics.offsetMs", offset.coerceIn(-10_000, 10_000).toString())
+    fun saveOffsetMs(offset: Long) = writeField("lyrics.offsetMs", SongOffsets.clamp(offset).toString())
 
     // ----- lyrics rendering (Metrolist behavior toggles) -----
 

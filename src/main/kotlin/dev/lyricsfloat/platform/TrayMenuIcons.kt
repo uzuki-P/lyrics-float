@@ -10,7 +10,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
-internal enum class TrayMenuIcon { APP, SHOW, HIDE, SEARCH, SETTINGS, PASS_ON, PASS_OFF, QUIT }
+internal enum class TrayMenuIcon { APP, SHOW, HIDE, SEARCH, TIMING, SETTINGS, PASS_ON, PASS_OFF, QUIT }
 
 /** PNG icon-data avoids mixing unrelated system-theme glyphs in one DBus menu. */
 internal object TrayMenuIcons {
@@ -56,6 +56,13 @@ internal object TrayMenuIcons {
                 TrayMenuIcon.SEARCH -> {
                     g.draw(Ellipse2D.Double(3.5, 3.5, 9.5, 9.5))
                     g.draw(Line2D.Double(12.0, 12.0, 17.0, 17.0))
+                }
+                TrayMenuIcon.TIMING -> {
+                    g.draw(Ellipse2D.Double(3.5, 4.5, 13.0, 13.0))
+                    g.draw(Line2D.Double(8.0, 2.0, 12.0, 2.0))
+                    g.color = if (dark) Color(0xFF, 0x98, 0xC3) else Color(0xC8, 0x3D, 0x79)
+                    g.draw(Line2D.Double(10.0, 11.0, 10.0, 7.5))
+                    g.draw(Line2D.Double(10.0, 11.0, 12.5, 12.5))
                 }
                 TrayMenuIcon.SETTINGS -> {
                     for ((y, knob) in listOf(5.0 to 7.0, 10.0 to 13.0, 15.0 to 9.0)) {

@@ -145,8 +145,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
         }
     }
 
-    private fun keyFor(track: TrackInfo): String =
-        "${LrcLib.cleanArtist(track.artist)}|${LrcLib.cleanTitle(track.title)}"
+    private fun keyFor(track: TrackInfo): String = songKey(track)
 
     private fun refresh(key: String?) {
         val track = key?.let { trackInfoByKey[it] }

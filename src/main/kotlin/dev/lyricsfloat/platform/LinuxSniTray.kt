@@ -156,6 +156,7 @@ private const val MENU_SETTINGS = 4
 private const val MENU_QUIT = 6
 private const val MENU_PASS_THROUGH = 7
 private const val MENU_HEADER = 8
+private const val MENU_TIMING = 10
 
 /**
  * StatusNotifierItem tray for Plasma/Freedesktop shells over the session bus.
@@ -165,6 +166,7 @@ class LinuxSniTray(
     private val onToggleOverlay: () -> Unit,
     private val onSearch: () -> Unit,
     private val onSettings: () -> Unit,
+    private val onTiming: () -> Unit,
     private val onToggleClickPassThrough: () -> Unit,
     private val clickPassThroughEnabled: () -> Boolean,
     private val overlayVisible: () -> Boolean,
@@ -233,6 +235,7 @@ class LinuxSniTray(
         MenuLayout(9, separatorProps(), emptyList()),
         MenuLayout(MENU_TOGGLE, toggleProps(), emptyList()),
         MenuLayout(MENU_SEARCH, itemProps("Search lyrics", TrayMenuIcon.SEARCH), emptyList()),
+        MenuLayout(MENU_TIMING, itemProps("Lyrics timing", TrayMenuIcon.TIMING), emptyList()),
         MenuLayout(MENU_SETTINGS, itemProps("Settings", TrayMenuIcon.SETTINGS), emptyList()),
         MenuLayout(2, separatorProps(), emptyList()),
         MenuLayout(MENU_PASS_THROUGH, passThroughProps(), emptyList()),
@@ -316,6 +319,7 @@ class LinuxSniTray(
                     MENU_HEADER -> itemProps("Lyrics Float", TrayMenuIcon.APP, enabled = false)
                     MENU_TOGGLE -> toggleProps()
                     MENU_SEARCH -> itemProps("Search lyrics", TrayMenuIcon.SEARCH)
+                    MENU_TIMING -> itemProps("Lyrics timing", TrayMenuIcon.TIMING)
                     MENU_SETTINGS -> itemProps("Settings", TrayMenuIcon.SETTINGS)
                     MENU_PASS_THROUGH -> passThroughProps()
                     MENU_QUIT -> itemProps("Quit", TrayMenuIcon.QUIT)
@@ -341,6 +345,7 @@ class LinuxSniTray(
             when (id) {
                 MENU_TOGGLE -> onToggleOverlay()
                 MENU_SEARCH -> onSearch()
+                MENU_TIMING -> onTiming()
                 MENU_SETTINGS -> onSettings()
                 MENU_PASS_THROUGH -> onToggleClickPassThrough()
                 MENU_QUIT -> onQuit()
