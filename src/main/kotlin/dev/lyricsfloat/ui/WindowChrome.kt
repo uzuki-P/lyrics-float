@@ -10,11 +10,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -23,13 +24,65 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import dev.lyricsfloat.platform.LinuxWindowMover
 import java.awt.Cursor
+import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Window
 import kotlin.math.roundToInt
 
-/** Invisible edge and corner targets, matching the floating lyrics window. */
+/**
+ * Move gesture for an undecorated window. setLocation dragging jitters under
+ * XWayland; the WM's own move (_NET_WM_MOVERESIZE) tracks the pointer
+ * per-frame, so prefer it there and only fall back to accumulated
+ * setLocation deltas when the WM refuses.
+ *
+ * The WM's interactive move consumes the pointer release, so [onDragEnd]
+ * fires as a cancel (or not at all) for native moves; callers that persist
+ * geometry should also watch AWT component events.
+ */
+fun Modifier.windowDragHandle(window: Window, onDragEnd: () -> Unit = {}): Modifier = composed {
+    val density = LocalDensity.current
+    pointerInput(window, density) {
+        var base: Point? = null
+        var delta = Offset.Zero
+        detectDragGestures(
+            onDragStart = {
+                val native = LinuxWindowMover.requestInteractiveMove(window)
+                base = if (native) null else Point(window.x, window.y)
+                delta = Offset.Zero
+            },
+            onDrag = { change, amount ->
+                change.consume()
+                base?.let { start ->
+                    delta += amount
+                    window.setLocation(
+                        start.x + (delta.x * density.density).roundToInt(),
+                        start.y + (delta.y * density.density).roundToInt(),
+                    )
+                }
+            },
+            onDragEnd = {
+                base = null
+                onDragEnd()
+            },
+            onDragCancel = {
+                base = null
+                onDragEnd()
+            },
+        )
+    }
+}
+
+/**
+ * Invisible edge and corner targets with resize cursors, shared by the
+ * lyrics overlay and the dialogs. A drag hands off to the WM's interactive
+ * resize; when the WM refuses, the zone tracks the drag with setBounds,
+ * clamped to the window's AWT minimum size.
+ *
+ * EWMH _NET_WM_MOVERESIZE direction hints: 0 top-left, 1 top, 2 top-right,
+ * 3 left, 4 right, 5 bottom-left, 6 bottom, 7 bottom-right.
+ */
 @Composable
-fun BoxScope.DialogResizeZones(window: Window) {
+fun BoxScope.WindowResizeZones(window: Window) {
     val density = LocalDensity.current
 
     @Composable

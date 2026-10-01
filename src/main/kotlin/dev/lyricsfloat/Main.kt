@@ -2,29 +2,30 @@
 
 package dev.lyricsfloat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.awt.SwingDialog
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.awt.SwingDialog
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowDecoration
 import androidx.compose.ui.window.WindowPosition
@@ -34,29 +35,30 @@ import androidx.compose.ui.window.rememberWindowState
 import dev.lyricsfloat.lyrics.LrcLib
 import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.lyrics.LyricsRepository
+import dev.lyricsfloat.lyrics.SongOffsets
+import dev.lyricsfloat.lyrics.currentIndexAt
+import dev.lyricsfloat.lyrics.songKey
 import dev.lyricsfloat.mpris.NowPlayingMonitor
 import dev.lyricsfloat.platform.AppState
 import dev.lyricsfloat.platform.Autostart
 import dev.lyricsfloat.platform.LinuxClickThrough
 import dev.lyricsfloat.platform.LinuxSniTray
 import dev.lyricsfloat.platform.LinuxWindowMover
-import dev.lyricsfloat.platform.WindowAnchor
 import dev.lyricsfloat.platform.anchorPosition
+import dev.lyricsfloat.ui.AppPalette
 import dev.lyricsfloat.ui.DarkPalette
-import dev.lyricsfloat.ui.DialogResizeZones
-import dev.lyricsfloat.ui.HoverMenuPosition
 import dev.lyricsfloat.ui.LightPalette
 import dev.lyricsfloat.ui.LocalAppPalette
-import dev.lyricsfloat.ui.LyricsTextPosition
 import dev.lyricsfloat.ui.OverlayView
 import dev.lyricsfloat.ui.SearchView
 import dev.lyricsfloat.ui.SettingsView
-import dev.lyricsfloat.ui.ThemeMode
+import dev.lyricsfloat.ui.TimingView
+import dev.lyricsfloat.ui.WindowResizeZones
 import dev.lyricsfloat.ui.rememberSystemThemeIsDark
 import dev.lyricsfloat.ui.themeIsDark
+import dev.lyricsfloat.ui.windowDragHandle
 import java.awt.Dimension
 import java.awt.Point
-import java.awt.Rectangle
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.io.File
@@ -65,7 +67,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 fun main() = application {
     installCrashLog()
@@ -74,38 +75,31 @@ fun main() = application {
     var overlayVisible by remember { mutableStateOf(true) }
     var searchVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
-
-    val darkTheme by rememberSystemThemeIsDark()
-    var themeMode by remember { mutableStateOf(AppState.loadThemeMode()) }
-    val palette = if (themeIsDark(themeMode, darkTheme)) DarkPalette else LightPalette
-
-    var fontSizeSp by remember { mutableStateOf(AppState.loadFontSizeSp()) }
-    var romajiFontSizeSp by remember { mutableStateOf(AppState.loadRomajiFontSizeSp()) }
-    var opacity by remember { mutableStateOf(AppState.loadOpacity()) }
-    var showNextLine by remember { mutableStateOf(AppState.loadShowNextLine()) }
-    var offsetMs by remember { mutableStateOf(AppState.loadOffsetMs()) }
-    var autoHide by remember { mutableStateOf(AppState.loadAutoHide()) }
-    var clickPassThrough by remember { mutableStateOf(AppState.loadClickPassThrough()) }
-    var hoverMenuPosition by remember { mutableStateOf(AppState.loadHoverMenuPosition()) }
-    var preferredPlayer by remember { mutableStateOf(AppState.loadPreferredPlayer()) }
-    var overlayAnchor by remember { mutableStateOf(AppState.loadOverlayAnchor()) }
-    var showIntervalIndicator by remember { mutableStateOf(AppState.loadShowIntervalIndicator()) }
-    var respectAgentPositioning by remember { mutableStateOf(AppState.loadRespectAgentPositioning()) }
-    var wordKaraoke by remember { mutableStateOf(AppState.loadWordKaraoke()) }
-    var romanizeJapanese by remember { mutableStateOf(AppState.loadRomanizeJapanese()) }
-    var textPosition by remember {
-        mutableStateOf(runCatching { LyricsTextPosition.valueOf(AppState.loadTextPosition()) }.getOrDefault(LyricsTextPosition.CENTER))
-    }
-    var autoScroll by remember { mutableStateOf(AppState.loadAutoScroll()) }
-    var textOutline by remember { mutableStateOf(AppState.loadTextOutline()) }
+    var timingVisible by remember { mutableStateOf(false) }
 
     val monitor = remember { NowPlayingMonitor() }
     val repository = remember { LyricsRepository(scope) }
+    val settings = remember { AppSettings(onRomanizeJapaneseChange = repository::setRomanizeJapanese) }
     val playback by monitor.active.collectAsState()
     val players by monitor.players.collectAsState()
     val lyrics by repository.current.collectAsState()
     val lyricsLoading by repository.loading.collectAsState()
     var enabledProviders by remember { mutableStateOf(LyricsProviders.enabledNames()) }
+
+    // Per-song offsets add on top of the global one.
+    val songOffsets = remember {
+        SongOffsets(
+            read = { AppState.readRaw(SongOffsets.STORAGE_KEY) },
+            write = { AppState.writeRaw(SongOffsets.STORAGE_KEY, it) },
+        )
+    }
+    val songOffsetMap by songOffsets.all.collectAsState()
+    val currentSongKey = playback?.track?.takeIf { it.hasContent }?.let(::songKey)
+    val songOffsetMs = currentSongKey?.let { songOffsetMap[it] } ?: 0L
+    val effectiveOffsetMs = settings.offsetMs + songOffsetMs
+
+    val darkTheme by rememberSystemThemeIsDark()
+    val palette = if (themeIsDark(settings.themeMode, darkTheme)) DarkPalette else LightPalette
 
     LaunchedEffect(Unit) {
         monitor.start(scope)
@@ -116,26 +110,26 @@ fun main() = application {
         scope.launch(Dispatchers.IO) { LinuxClickThrough.warmUp() }
         scope.launch(Dispatchers.IO) { Autostart.refresh() }
     }
-    LaunchedEffect(preferredPlayer) {
-        monitor.preferredIdentity = preferredPlayer
+    LaunchedEffect(settings.preferredPlayer) {
+        monitor.preferredIdentity = settings.preferredPlayer
     }
 
     // The pill hides itself when nothing is playing, unless auto-hide is off.
     val playbackGone = playback == null || playback?.isPastEnd() == true
-    val overlayShown = overlayVisible && (!playbackGone || !autoHide)
+    val overlayShown = overlayVisible && (!playbackGone || !settings.autoHide)
     val quit = { exitApplication() }
 
     val toggleClickPassThrough = {
-        clickPassThrough = !clickPassThrough
-        AppState.saveClickPassThrough(clickPassThrough)
+        settings.clickPassThrough = !settings.clickPassThrough
     }
     DisposableEffect(Unit) {
         val tray = LinuxSniTray(
             onToggleOverlay = { overlayVisible = !overlayVisible },
             onSearch = { searchVisible = true },
             onSettings = { settingsVisible = true },
+            onTiming = { timingVisible = true },
             onToggleClickPassThrough = toggleClickPassThrough,
-            clickPassThroughEnabled = { clickPassThrough },
+            clickPassThroughEnabled = { settings.clickPassThrough },
             overlayVisible = { overlayVisible },
             onQuit = quit,
         )
@@ -173,23 +167,15 @@ fun main() = application {
         val density = LocalDensity.current
 
         // AWT floor so the pill can never shrink below a usable size, even if
-        // the WM ignores our minimum-size hints.
-        DisposableEffect(window, density) {
-            window.minimumSize = Dimension(
-                with(density) { AppState.MIN_WIDTH_DP.dp.roundToPx() },
-                with(density) { AppState.MIN_HEIGHT_DP.dp.roundToPx() },
-            )
-            onDispose { window.minimumSize = Dimension(0, 0) }
-        }
+        // the WM ignores our minimum-size hints. The resize zones' manual
+        // fallback clamps against this too.
+        MinimumWindowSize(window, AppState.MIN_WIDTH_DP.dp, AppState.MIN_HEIGHT_DP.dp)
 
         // Click pass-through removes the overlay's entire input region so
         // XWayland sends pointer events to the windows below. Keyed on
         // overlayShown because a hidden window has no XID to shape yet.
-        DisposableEffect(clickPassThrough, overlayShown) {
-            fun applyShape() {
-                LinuxClickThrough.apply(window, clickPassThrough)
-            }
-            applyShape()
+        DisposableEffect(settings.clickPassThrough, overlayShown) {
+            LinuxClickThrough.apply(window, settings.clickPassThrough)
             onDispose {
                 LinuxClickThrough.apply(window, false)
             }
@@ -205,7 +191,7 @@ fun main() = application {
                 .defaultScreenDevice.defaultConfiguration.bounds
             val margin = with(density) { 24.dp.roundToPx() }
             val position = customPosition
-                ?: anchorPosition(overlayAnchor, bounds, window.width, window.height, margin)
+                ?: anchorPosition(settings.overlayAnchor, bounds, window.width, window.height, margin)
             repeat(5) {
                 window.setLocation(position.x, position.y)
                 withFrameNanos { }
@@ -249,117 +235,145 @@ fun main() = application {
             }
         }
 
-        var dragBase by remember { mutableStateOf<Point?>(null) }
-        var dragDelta by remember { mutableStateOf(Offset.Zero) }
-        var wmMoving by remember { mutableStateOf(false) }
-        var manualResizeBase by remember { mutableStateOf<Rectangle?>(null) }
-        val minSizePx = with(density) {
-            Dimension(
-                AppState.MIN_WIDTH_DP.dp.roundToPx(),
-                AppState.MIN_HEIGHT_DP.dp.roundToPx(),
-            )
-        }
         CompositionLocalProvider(LocalAppPalette provides palette) {
             OverlayView(
                 playback = playback,
                 lyrics = lyrics,
                 loading = lyricsLoading,
-                fontSizeSp = fontSizeSp,
-                romajiFontSizeSp = romajiFontSizeSp,
-                opacity = opacity,
-                showNext = showNextLine,
-                offsetMs = offsetMs,
-                showIntervalIndicator = showIntervalIndicator,
-                respectAgentPositioning = respectAgentPositioning,
-                wordKaraoke = wordKaraoke,
-                romanizeJapanese = romanizeJapanese,
-                textPosition = textPosition,
-                textOutline = textOutline,
-                autoScroll = autoScroll,
-                clickPassThrough = clickPassThrough,
-                hoverMenuPosition = hoverMenuPosition,
+                settings = settings,
+                offsetMs = effectiveOffsetMs,
+                songOffsetMs = songOffsetMs,
                 onSearch = { searchVisible = true },
                 onSettings = { settingsVisible = true },
+                onTiming = { timingVisible = true },
                 onToggleClickPassThrough = toggleClickPassThrough,
-                onDragStart = {
-                    // setLocation dragging jitters under XWayland; the WM's own
-                    // move tracks the pointer per-frame, so prefer it there.
-                    wmMoving = LinuxWindowMover.requestInteractiveMove(window)
-                    if (!wmMoving) {
-                        dragBase = Point(window.x, window.y)
-                        dragDelta = Offset.Zero
-                    }
-                },
-                onDrag = { dx, dy ->
-                    if (!wmMoving) {
-                        val base = dragBase
-                        if (base != null) {
-                            dragDelta += Offset(dx, dy)
-                            val scale = density.density
-                            window.setLocation(
-                                base.x + (dragDelta.x * scale).roundToInt(),
-                                base.y + (dragDelta.y * scale).roundToInt(),
-                            )
-                        }
-                    }
-                },
-                onDragEnd = {
-                    dragBase = null
-                    wmMoving = false
+                dragModifier = Modifier.windowDragHandle(window) {
                     customPosition = Point(window.x, window.y)
                     AppState.saveOverlayPosition(window.x, window.y)
                 },
-                onResizeStart = { direction ->
-                    // Native WM resize (edge/corner grab); fall back to manual
-                    // setSize tracking when the WM refuses the message.
-                    val native = LinuxWindowMover.requestInteractiveResize(window, direction)
-                    manualResizeBase = if (native) null else window.bounds
-                    native
-                },
-                onManualResize = { direction, dx, dy ->
-                    val base = manualResizeBase
-                    if (base != null) {
-                        val scale = density.density
-                        val ddx = (dx * scale).roundToInt()
-                        val ddy = (dy * scale).roundToInt()
-                        var x = base.x
-                        var y = base.y
-                        var w = base.width
-                        var h = base.height
-                        val fromLeft = direction == 0 || direction == 3 || direction == 5
-                        val fromTop = direction == 0 || direction == 1 || direction == 2
-                        if (direction == 2 || direction == 4 || direction == 7) w = base.width + ddx
-                        if (direction == 5 || direction == 6 || direction == 7) h = base.height + ddy
-                        if (fromLeft) {
-                            x = base.x + ddx
-                            w = base.width - ddx
-                        }
-                        if (fromTop) {
-                            y = base.y + ddy
-                            h = base.height - ddy
-                        }
-                        if (w < minSizePx.width) {
-                            w = minSizePx.width
-                            if (fromLeft) x = base.x + (base.width - minSizePx.width)
-                        }
-                        if (h < minSizePx.height) {
-                            h = minSizePx.height
-                            if (fromTop) y = base.y + (base.height - minSizePx.height)
-                        }
-                        window.setBounds(x, y, w, h)
-                    }
-                },
+                resizeZones = { WindowResizeZones(window) },
             )
         }
     }
 
     // ----- search window -----
 
-    SwingDialog(
-        onCloseRequest = { searchVisible = false },
-        state = rememberDialogState(size = DpSize(400.dp, 560.dp)),
-        visible = searchVisible,
+    FloatingDialog(
         title = "Lyrics Float Search",
+        visible = searchVisible,
+        onClose = { searchVisible = false },
+        size = DpSize(420.dp, 600.dp),
+        minSize = DpSize(340.dp, 320.dp),
+        palette = palette,
+    ) { dragHandle ->
+        SearchView(
+            targetTitle = playback?.track?.title.orEmpty(),
+            targetArtist = playback?.track?.artist.orEmpty(),
+            hasTarget = playback?.track?.hasContent == true,
+            overrideApplied = repository.hasOverride(),
+            initialQuery = playback?.track?.let { track ->
+                listOfNotNull(
+                    LrcLib.cleanTitle(track.title).takeIf(String::isNotBlank),
+                    LrcLib.cleanArtist(track.artist).takeIf(String::isNotBlank),
+                ).joinToString(" ")
+            }.orEmpty(),
+            onPick = { result -> repository.applyManualPick(result, monitor.active.value?.track) },
+            onApplyManualText = { text -> repository.applyManualText(text, monitor.active.value?.track) },
+            currentLyricsText = { repository.currentRawLyrics() },
+            onSearchWeb = ::openLyricsWebSearch,
+            onClearOverride = repository::clearOverride,
+            onClose = { searchVisible = false },
+            search = { query, provider -> repository.search(query, provider) },
+            dragHandleModifier = dragHandle,
+        )
+    }
+
+    // ----- settings window -----
+
+    FloatingDialog(
+        title = "Lyrics Float Settings",
+        visible = settingsVisible,
+        onClose = { settingsVisible = false },
+        size = DpSize(400.dp, 640.dp),
+        minSize = DpSize(340.dp, 320.dp),
+        palette = palette,
+    ) { dragHandle ->
+        SettingsView(
+            settings = settings,
+            players = players,
+            enabledProviders = enabledProviders,
+            onProviderEnabledChange = { name, enabled ->
+                val next = enabledProviders.toMutableSet()
+                if (enabled) next.add(name) else next.remove(name)
+                enabledProviders = next
+                LyricsProviders.setEnabled(next)
+            },
+            onAnchorChange = { anchor ->
+                settings.overlayAnchor = anchor
+                customPosition = null
+            },
+            onResetOverlayPosition = {
+                customPosition = null
+            },
+            onOpenTiming = { timingVisible = true },
+            onClose = { settingsVisible = false },
+            dragHandleModifier = dragHandle,
+        )
+    }
+
+    // ----- lyrics timing window -----
+
+    FloatingDialog(
+        title = "Lyrics Float Timing",
+        visible = timingVisible,
+        onClose = { timingVisible = false },
+        size = DpSize(400.dp, 600.dp),
+        minSize = DpSize(340.dp, 420.dp),
+        palette = palette,
+    ) { dragHandle ->
+        TimingView(
+            targetTitle = playback?.track?.title.orEmpty(),
+            targetArtist = playback?.track?.artist.orEmpty(),
+            hasTarget = currentSongKey != null,
+            songOffsetMs = songOffsetMs,
+            globalOffsetMs = settings.offsetMs,
+            onSongOffsetChange = { value -> currentSongKey?.let { songOffsets.set(it, value) } },
+            currentLines = {
+                // Same line the overlay highlights: interpolated position plus
+                // the effective offset.
+                val entries = repository.current.value.entries
+                val position = monitor.active.value?.positionMs() ?: 0L
+                val offset = settings.offsetMs + songOffsets.get(currentSongKey)
+                val index = entries.currentIndexAt(position, offset)
+                entries.getOrNull(index)?.text to entries.getOrNull(index + 1)?.text
+            },
+            onOpenSettings = { settingsVisible = true },
+            onClose = { timingVisible = false },
+            dragHandleModifier = dragHandle,
+        )
+    }
+}
+
+/**
+ * Undecorated, transparent, always-on-top utility dialog (search, settings)
+ * that opens centered on screen, with a drag-to-move header and edge/corner
+ * resize zones. [content] receives the header's drag modifier.
+ */
+@Composable
+private fun FloatingDialog(
+    title: String,
+    visible: Boolean,
+    onClose: () -> Unit,
+    size: DpSize,
+    minSize: DpSize,
+    palette: AppPalette,
+    content: @Composable (dragHandle: Modifier) -> Unit,
+) {
+    SwingDialog(
+        onCloseRequest = onClose,
+        state = rememberDialogState(size = size),
+        visible = visible,
+        title = title,
         icon = null,
         decoration = WindowDecoration.Undecorated(0.dp),
         transparent = true,
@@ -368,7 +382,15 @@ fun main() = application {
         focusable = true,
         alwaysOnTop = true,
         onPreviewKeyEvent = { false },
-        onKeyEvent = { false },
+        onKeyEvent = { event ->
+            // Escape closes the dialog like a native one.
+            if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                onClose()
+                true
+            } else {
+                false
+            }
+        },
         modalityType = java.awt.Dialog.ModalityType.MODELESS,
         init = { dialog ->
             // Utility windows are skipped by the taskbar, pager and alt-tab.
@@ -377,15 +399,12 @@ fun main() = application {
     ) {
         TransparentWindowBackground(window)
         val density = LocalDensity.current
-        DisposableEffect(window, density) {
-            window.minimumSize = Dimension(with(density) { 340.dp.roundToPx() }, with(density) { 320.dp.roundToPx() })
-            onDispose { window.minimumSize = Dimension(0, 0) }
-        }
+        MinimumWindowSize(window, minSize.width, minSize.height)
         LaunchedEffect(Unit) {
             val bounds = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
                 .defaultScreenDevice.defaultConfiguration.bounds
-            val width = with(density) { 400.dp.roundToPx() }
-            val height = with(density) { 560.dp.roundToPx() }
+            val width = with(density) { size.width.roundToPx() }
+            val height = with(density) { size.height.roundToPx() }
             // AWT centers the dialog when it becomes visible, so keep overriding
             // for a few frames until it settles centered on the screen.
             repeat(5) {
@@ -395,187 +414,23 @@ fun main() = application {
         }
         CompositionLocalProvider(LocalAppPalette provides palette) {
             Box(Modifier.fillMaxSize()) {
-                SearchView(
-                    targetTitle = playback?.track?.title.orEmpty(),
-                    targetArtist = playback?.track?.artist.orEmpty(),
-                    hasTarget = playback?.track?.hasContent == true,
-                    overrideApplied = repository.hasOverride(),
-                    initialQuery = playback?.track?.let { track ->
-                        listOfNotNull(
-                            LrcLib.cleanTitle(track.title).takeIf(String::isNotBlank),
-                            LrcLib.cleanArtist(track.artist).takeIf(String::isNotBlank),
-                        ).joinToString(" ")
-                    }.orEmpty(),
-                    onPick = { result -> repository.applyManualPick(result, monitor.active.value?.track) },
-                    onApplyManualText = { text -> repository.applyManualText(text, monitor.active.value?.track) },
-                    currentLyricsText = { repository.currentRawLyrics() },
-                    onSearchWeb = ::openLyricsWebSearch,
-                    onClearOverride = repository::clearOverride,
-                    onClose = { searchVisible = false },
-                    search = { query, provider -> repository.search(query, provider) },
-                    dragHandleModifier = Modifier.windowDragHandle(window),
-                )
-                DialogResizeZones(window)
-            }
-        }
-    }
-
-    // ----- settings window -----
-
-    SwingDialog(
-        onCloseRequest = { settingsVisible = false },
-        state = rememberDialogState(size = DpSize(360.dp, 660.dp)),
-        visible = settingsVisible,
-        title = "Lyrics Float Settings",
-        icon = null,
-        decoration = WindowDecoration.Undecorated(0.dp),
-        transparent = true,
-        resizable = true,
-        enabled = true,
-        focusable = true,
-        alwaysOnTop = true,
-        onPreviewKeyEvent = { false },
-        onKeyEvent = { false },
-        modalityType = java.awt.Dialog.ModalityType.MODELESS,
-        init = { dialog ->
-            runCatching { dialog.type = java.awt.Window.Type.UTILITY }
-        },
-    ) {
-        TransparentWindowBackground(window)
-        val density = LocalDensity.current
-        DisposableEffect(window, density) {
-            window.minimumSize = Dimension(with(density) { 320.dp.roundToPx() }, with(density) { 320.dp.roundToPx() })
-            onDispose { window.minimumSize = Dimension(0, 0) }
-        }
-        LaunchedEffect(Unit) {
-            val bounds = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
-                .defaultScreenDevice.defaultConfiguration.bounds
-            val width = with(density) { 360.dp.roundToPx() }
-            val height = with(density) { 660.dp.roundToPx() }
-            repeat(5) {
-                window.setLocation(bounds.x + (bounds.width - width) / 2, bounds.y + (bounds.height - height) / 2)
-                withFrameNanos { }
-            }
-        }
-        CompositionLocalProvider(LocalAppPalette provides palette) {
-            Box(Modifier.fillMaxSize()) {
-                SettingsView(
-                    themeMode = themeMode,
-                    onThemeModeChange = { mode ->
-                        themeMode = mode
-                        AppState.saveThemeMode(mode)
-                    },
-                    fontSizeSp = fontSizeSp,
-                    onFontSizeChange = { size ->
-                        fontSizeSp = size
-                        AppState.saveFontSizeSp(size)
-                    },
-                    romajiFontSizeSp = romajiFontSizeSp,
-                    onRomajiFontSizeChange = { size ->
-                        romajiFontSizeSp = size
-                        AppState.saveRomajiFontSizeSp(size)
-                    },
-                    opacity = opacity,
-                    onOpacityChange = { value ->
-                        opacity = value
-                        AppState.saveOpacity(value)
-                    },
-                    showNextLine = showNextLine,
-                    onShowNextLineChange = { value ->
-                        showNextLine = value
-                        AppState.saveShowNextLine(value)
-                    },
-                    offsetMs = offsetMs,
-                    onOffsetChange = { value ->
-                        offsetMs = value
-                        AppState.saveOffsetMs(value)
-                    },
-                    autoHide = autoHide,
-                    onAutoHideChange = { value ->
-                        autoHide = value
-                        AppState.saveAutoHide(value)
-                    },
-                    clickPassThrough = clickPassThrough,
-                    onClickPassThroughChange = { value ->
-                        clickPassThrough = value
-                        AppState.saveClickPassThrough(value)
-                    },
-                    hoverMenuPosition = hoverMenuPosition,
-                    onHoverMenuPositionChange = { value ->
-                        hoverMenuPosition = value
-                        AppState.saveHoverMenuPosition(value)
-                    },
-                    anchor = overlayAnchor,
-                    onAnchorChange = { anchor ->
-                        overlayAnchor = anchor
-                        AppState.saveOverlayAnchor(anchor)
-                        customPosition = null
-                    },
-                    preferredPlayer = preferredPlayer,
-                    onPreferredPlayerChange = { identity ->
-                        preferredPlayer = identity
-                        AppState.savePreferredPlayer(identity)
-                    },
-                    players = players,
-                    onResetOverlayPosition = {
-                        customPosition = null
-                    },
-                    showIntervalIndicator = showIntervalIndicator,
-                    onShowIntervalIndicatorChange = { value ->
-                        showIntervalIndicator = value
-                        AppState.saveShowIntervalIndicator(value)
-                    },
-                    respectAgentPositioning = respectAgentPositioning,
-                    onRespectAgentPositioningChange = { value ->
-                        respectAgentPositioning = value
-                        AppState.saveRespectAgentPositioning(value)
-                    },
-                    wordKaraoke = wordKaraoke,
-                    onWordKaraokeChange = { value ->
-                        wordKaraoke = value
-                        AppState.saveWordKaraoke(value)
-                    },
-                    romanizeJapanese = romanizeJapanese,
-                    onRomanizeJapaneseChange = { value ->
-                        romanizeJapanese = value
-                        repository.setRomanizeJapanese(value)
-                    },
-                    textPosition = textPosition,
-                    onTextPositionChange = { value ->
-                        textPosition = value
-                        AppState.saveTextPosition(value.name)
-                    },
-                    autoScroll = autoScroll,
-                    onAutoScrollChange = { value ->
-                        autoScroll = value
-                        AppState.saveAutoScroll(value)
-                    },
-                    textOutline = textOutline,
-                    onTextOutlineChange = { value ->
-                        textOutline = value
-                        AppState.saveTextOutline(value)
-                    },
-                    enabledProviders = enabledProviders,
-                    onProviderEnabledChange = { name, enabled ->
-                        val next = enabledProviders.toMutableSet()
-                        if (enabled) next.add(name) else next.remove(name)
-                        enabledProviders = next
-                        LyricsProviders.setEnabled(next)
-                    },
-                    onClose = { settingsVisible = false },
-                    dragHandleModifier = Modifier.windowDragHandle(window),
-                )
-                DialogResizeZones(window)
+                content(Modifier.windowDragHandle(window))
+                WindowResizeZones(window)
             }
         }
     }
 }
 
-private fun Modifier.windowDragHandle(window: java.awt.Window): Modifier = pointerInput(window) {
-    detectDragGestures(
-        onDragStart = { LinuxWindowMover.requestInteractiveMove(window) },
-        onDrag = { change, _ -> change.consume() },
-    )
+@Composable
+private fun MinimumWindowSize(window: java.awt.Window, width: Dp, height: Dp) {
+    val density = LocalDensity.current
+    DisposableEffect(window, density) {
+        window.minimumSize = Dimension(
+            with(density) { width.roundToPx() },
+            with(density) { height.roundToPx() },
+        )
+        onDispose { window.minimumSize = Dimension(0, 0) }
+    }
 }
 
 @Composable

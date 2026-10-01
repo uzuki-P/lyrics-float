@@ -19,7 +19,15 @@ data class AppPalette(
     val textShadow: Color,
 ) {
     val divider: Color = onSurface.copy(alpha = 0.08f)
-    val onSurfaceDim: Color = onSurface.copy(alpha = 0.55f)
+    val onSurfaceDim: Color = onSurface.copy(alpha = 0.6f)
+    val onSurfaceFaint: Color = onSurface.copy(alpha = 0.4f)
+    /** Raised group background inside dialogs (cards, inputs, list rows). */
+    val card: Color = onSurface.copy(alpha = 0.05f)
+    val cardHover: Color = onSurface.copy(alpha = 0.09f)
+    val outline: Color = onSurface.copy(alpha = 0.12f)
+    val accentSoft: Color = accent.copy(alpha = 0.16f)
+    val danger: Color = Color(0xFFF87171)
+    val info: Color = Color(0xFF7DD3FC)
 }
 
 internal val DarkPalette = AppPalette(
