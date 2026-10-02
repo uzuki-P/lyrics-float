@@ -373,3 +373,10 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
       (50 ms / 100 ms / 1 s), ±10 s slider, exact entry in ms or seconds,
       live "now showing" line, reset. Opened from the hover bar (timer icon,
       highlighted when the song has an offset), the tray menu and Settings.
+
+## 27. Blank lyric intervals
+
+- [x] Keep timestamped blank lines as empty viewport slots so short pauses,
+      the intro and outro, and gaps with interval indicators disabled stay
+      at their timeline position instead of scrolling to the first lyric.
+      Long gaps still show the existing circular interval indicator.

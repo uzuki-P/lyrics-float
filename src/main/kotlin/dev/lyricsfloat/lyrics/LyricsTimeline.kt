@@ -22,7 +22,9 @@ sealed interface LyricsItem {
 const val INTERVAL_INDICATOR_GAP_MS = 4_000L
 
 /**
- * Builds the same line/indicator sequence as Metrolist's updateMergedList.
+ * Uses Metrolist's interval rules, but preserves blank rows as empty slots.
+ * The viewport needs a slot for every timed entry so short pauses and gaps
+ * with indicators disabled do not send its focus back to the first item.
  * A nonblank line without word timings has no known end, so it cannot start
  * an indicator. Blank timed lines and word-timed lines have known ends.
  */
@@ -34,7 +36,7 @@ fun List<LyricsEntry>.withIntervalIndicators(
     val items = mutableListOf<LyricsItem>()
     for (i in indices) {
         val entry = this[i]
-        if (entry.text.isNotBlank()) items.add(LyricsItem.Line(i, entry))
+        items.add(LyricsItem.Line(i, entry))
         if (!showIntervalIndicator || i == lastIndex) continue
 
         val next = this[i + 1]

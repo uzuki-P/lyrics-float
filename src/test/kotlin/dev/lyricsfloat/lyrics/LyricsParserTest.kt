@@ -115,8 +115,8 @@ class LyricsParserTest {
             LyricsEntry(10_000, "Two"),
         )
         val items = entries.withIntervalIndicators()
-        // The blank head is omitted; its short gap has no indicator.
-        assertEquals(3, items.size)
+        // The blank head remains an empty slot; its short gap has no indicator.
+        assertEquals(4, items.size)
         val indicator = items.filterIsInstance<LyricsItem.Indicator>().single()
         assertEquals(2_000, indicator.gapStartMs)
         assertEquals(10_000, indicator.gapEndMs)
@@ -135,8 +135,8 @@ class LyricsParserTest {
         assertEquals(1, beforeBackground.withIntervalIndicators().filterIsInstance<LyricsItem.Indicator>().size)
 
         val disabled = beforeBackground.withIntervalIndicators(showIntervalIndicator = false)
-        assertEquals(1, disabled.size)
-        assertTrue(disabled.single() is LyricsItem.Line)
+        assertEquals(2, disabled.size)
+        assertTrue(disabled.all { it is LyricsItem.Line })
     }
 
     @Test

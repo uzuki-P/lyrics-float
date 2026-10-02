@@ -93,6 +93,12 @@ private const val SCROLL_MS = 700
 private const val STAGGER_MS = 32
 private const val MAX_STAGGER_STEPS = 7
 
+internal fun focusLyricsItemIndex(items: List<LyricsItem>, currentIdx: Int, gap: LyricsItem.Indicator?): Int =
+    when {
+        gap != null -> items.indexOfFirst { it == gap }.coerceAtLeast(0)
+        else -> items.indexOfFirst { it is LyricsItem.Line && it.index == currentIdx.coerceAtLeast(0) }.coerceAtLeast(0)
+    }
+
 /**
  * The scrollable lyrics stack, following Metrolist: every line is laid out in
  * flow and auto-scroll brings the active line to the viewport center. Manual
@@ -149,10 +155,7 @@ internal fun LyricsViewport(
         null
     }
 
-    val focusItemIndex = when {
-        gap != null -> items.indexOfFirst { it == gap }.coerceAtLeast(0)
-        else -> items.indexOfFirst { it is LyricsItem.Line && it.index == currentIdx.coerceAtLeast(0) }.coerceAtLeast(0)
-    }
+    val focusItemIndex = focusLyricsItemIndex(items, currentIdx, gap)
     fun isActiveItem(index: Int): Boolean =
         gap == null && (items.getOrNull(index) as? LyricsItem.Line)?.index == currentIdx
 
@@ -169,6 +172,7 @@ internal fun LyricsViewport(
             val full = (fullHeights[index] ?: heights[index] ?: 0).toFloat()
             return when {
                 items[index] is LyricsItem.Indicator -> (heights[index] ?: 0).toFloat()
+                (items[index] as? LyricsItem.Line)?.entry?.text?.isBlank() == true -> full
                 isActiveItem(index) -> full
                 else -> full * INACTIVE_SCALE
             }
@@ -322,7 +326,13 @@ internal fun LyricsViewport(
                             },
                     ) {
                         when (item) {
-                            is LyricsItem.Line -> LyricLine(
+                            is LyricsItem.Line -> if (item.entry.text.isBlank()) {
+                                Spacer(
+                                    Modifier.fillMaxWidth()
+                                        .height(with(density) { (fontSizeSp * 1.3).sp.toDp() })
+                                        .onSizeChanged { fullHeights[itemIndex] = it.height },
+                                )
+                            } else LyricLine(
                                 entry = item.entry,
                                 isActive = isActiveItem(itemIndex),
                                 distance = distance,
@@ -881,4 +891,3 @@ private fun alignFor(agent: String?, respectAgentPositioning: Boolean, textPosit
         LyricsTextPosition.CENTER -> TextAlign.Center
     }
 }
-
