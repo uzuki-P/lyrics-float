@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C2654"/>
+      <stop offset="1" stop-color="#121126"/>
+    </linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFA3D2"/>
+      <stop offset="1" stop-color="#E0559A"/>
+    </linearGradient>
+    <linearGradient id="pill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bg)"/>
+  <rect x="25" y="25" width="462" height="462" rx="107" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+  <!-- note floating above the overlay pill -->
+  <path fill="url(#hl)" d="M318 112 392 98v28l-50 10v84c0 20-18 34-40 34s-36-12-36-29 17-32 39-32c7 0 12 1 17 3z"/>
+  <!-- the overlay pill -->
+  <rect x="84" y="270" width="344" height="128" rx="64" fill="url(#pill)" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="3"/>
+  <!-- current lyric line, karaoke-filled up to the cursor -->
+  <rect x="140" y="306" width="232" height="26" rx="13" fill="#FFFFFF" fill-opacity="0.3"/>
+  <rect x="140" y="306" width="140" height="26" rx="13" fill="url(#hl)"/>
+  <!-- next line -->
+  <rect x="180" y="348" width="152" height="16" rx="8" fill="#FFFFFF" fill-opacity="0.22"/>
+</svg>

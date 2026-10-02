@@ -159,7 +159,7 @@ fun main() = application {
             // Keep the floating lyrics out of the taskbar and window switcher.
             runCatching { window.type = java.awt.Window.Type.UTILITY }
             window.iconImage = requireNotNull(
-                LinuxSniTray::class.java.classLoader.getResourceAsStream("icons/lyrics-float-v2.png"),
+                LinuxSniTray::class.java.classLoader.getResourceAsStream("icons/lyrics-float.png"),
             ) { "missing taskbar icon" }.use(ImageIO::read)
             onDispose { window.iconImage = null }
         }

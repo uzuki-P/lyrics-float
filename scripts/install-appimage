@@ -41,16 +41,16 @@ cp -f "$latest" "$temp"
 chmod 755 "$temp"
 mv -f "$temp" "$target"
 
-# Sized icon directories want matching image sizes; the source art is much
-# larger, so downscale when possible (launchers skip or blur odd sizes).
+# Sized icon directories want matching image sizes; downscale in case the
+# source art grows (launchers skip or blur odd sizes).
 icon_dir="$data_dir/icons/hicolor/512x512/apps"
 icon="$icon_dir/lyrics-float.png"
 if command -v magick >/dev/null 2>&1; then
-    magick "$repo/src/main/resources/icons/lyrics-float-v2.png" -resize 512x512 "$icon"
+    magick "$repo/src/main/resources/icons/lyrics-float.png" -resize 512x512 "$icon"
 elif command -v convert >/dev/null 2>&1; then
-    convert "$repo/src/main/resources/icons/lyrics-float-v2.png" -resize 512x512 "$icon"
+    convert "$repo/src/main/resources/icons/lyrics-float.png" -resize 512x512 "$icon"
 else
-    cp -f "$repo/src/main/resources/icons/lyrics-float-v2.png" "$icon"
+    cp -f "$repo/src/main/resources/icons/lyrics-float.png" "$icon"
 fi
 
 # env -u: a polluted LD_LIBRARY_PATH (e.g. AppImage-hosted editors) makes the

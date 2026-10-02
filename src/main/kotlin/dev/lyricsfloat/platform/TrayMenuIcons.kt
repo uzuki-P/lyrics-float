@@ -30,9 +30,8 @@ internal object TrayMenuIcons {
             g.color = if (dark) Color(0xF5, 0xEF, 0xF8) else Color(0x32, 0x20, 0x3E)
             when (icon) {
                 TrayMenuIcon.APP -> {
-                    val resource = if (dark) "lyrics_float_tray_light.png" else "lyrics_float_tray_dark.png"
                     val stream = TrayMenuIcons::class.java.classLoader.getResourceAsStream(
-                        "composeResources/dev.lyricsfloat.resources/drawable/$resource",
+                        "composeResources/dev.lyricsfloat.resources/drawable/lyrics_float_tray.png",
                     )
                     stream?.use { g.drawImage(ImageIO.read(it), 1, 1, 18, 18, null) }
                 }

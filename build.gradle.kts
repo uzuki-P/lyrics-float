@@ -65,7 +65,7 @@ compose.desktop {
             copyright = "Copyright © 2026 Uzuki-P"
 
             linux {
-                iconFile.set(project.file("src/main/resources/icons/lyrics-float-v2.png"))
+                iconFile.set(project.file("src/main/resources/icons/lyrics-float.png"))
             }
         }
     }
@@ -79,7 +79,7 @@ tasks.register("packageAppImageFile") {
     val appDir = layout.buildDirectory.dir("compose/binaries/main/appimage/lyrics-float.AppDir")
     val outputDir = layout.buildDirectory.dir("compose/binaries/main/appimage")
     val toolFile = File(System.getProperty("user.home"), ".cache/lyrics-float/tools/appimagetool-x86_64.AppImage")
-    val iconFile = layout.projectDirectory.file("src/main/resources/icons/lyrics-float-v2.png")
+    val iconFile = layout.projectDirectory.file("src/main/resources/icons/lyrics-float.png")
     val appVersion = project.version.toString()
     val outputFile = outputDir.get().file("lyrics-float-$appVersion.AppImage")
 

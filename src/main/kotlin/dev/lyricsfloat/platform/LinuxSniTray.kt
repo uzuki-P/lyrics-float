@@ -206,15 +206,12 @@ class LinuxSniTray(
 
     private fun pixmap(): List<IconPixmap> {
         return runCatching {
-            val name = if (trayIconIsDark()) {
-                "lyrics_float_tray_light.png"
-            } else {
-                "lyrics_float_tray_dark.png"
-            }
+            // One mid-tone pink glyph for every panel: the app theme says nothing
+            // about the panel's colors, so a theme-picked glyph could vanish.
             val bytes: ByteArray = requireNotNull(
                 LinuxSniTray::class.java.classLoader
-                    .getResourceAsStream("composeResources/dev.lyricsfloat.resources/drawable/$name"),
-            ) { "missing tray icon $name" }.use(InputStream::readBytes)
+                    .getResourceAsStream("composeResources/dev.lyricsfloat.resources/drawable/lyrics_float_tray.png"),
+            ) { "missing tray icon" }.use(InputStream::readBytes)
             val img: BufferedImage = ImageIO.read(bytes.inputStream())
             val argb = IntArray(img.width * img.height)
             img.getRGB(0, 0, img.width, img.height, argb, 0, img.width)
