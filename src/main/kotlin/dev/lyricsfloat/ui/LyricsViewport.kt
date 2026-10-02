@@ -510,6 +510,8 @@ private fun LyricLine(
 private class WordSegment(
     val wordIndex: Int,
     val layout: TextLayoutResult,
+    /** Same piece with [TEXT_SHADOW] in its style, for the back pass; null with outlines. */
+    val shadowLayout: TextLayoutResult?,
     val topLeft: Offset,
     val bounds: Rect,
     /** Share of the word's characters before / up to the end of this segment. */
@@ -551,70 +553,101 @@ private fun KaraokeLineText(
                 softWrap = true,
             )
         }
-        val segments = remember(layout, words) {
-            words?.let { buildSegments(text, it, layout, style, textMeasurer) }.orEmpty()
+        val segments = remember(layout, words, outline) {
+            words?.let { buildSegments(text, it, layout, style, textMeasurer, withShadow = !outline) }.orEmpty()
+        }
+        // The karaoke back pass draws shadows from a layout that carries the
+        // shadow in its style. Toggling the shadow per draw call on one
+        // layout would rebuild its Skia paragraph twice per frame.
+        val shadowLayout = remember(layout, outline, segments) {
+            if (outline || segments.isEmpty()) {
+                null
+            } else {
+                textMeasurer.measure(
+                    text = text,
+                    style = style.copy(textAlign = align, shadow = TEXT_SHADOW),
+                    constraints = Constraints(minWidth = width, maxWidth = width),
+                    softWrap = true,
+                )
+            }
         }
         val fontPx = with(density) { style.fontSize.toPx() }
         val stroke = remember(outlinePx) { Stroke(width = outlinePx, join = StrokeJoin.Round) }
-        val shadow = if (outline) null else TEXT_SHADOW
 
         Canvas(Modifier.fillMaxWidth().height(with(density) { layout.size.height.toDp() })) {
             val karaoke = segments.isNotEmpty() && focus > 0.01f
             if (!karaoke) {
                 if (outline) drawText(layout, color = OUTLINE_COLOR, drawStyle = stroke)
-                drawText(layout, color = lerp(Color.White, activeColor, focus), shadow = shadow)
+                drawText(layout, color = lerp(Color.White, activeColor, focus), shadow = if (outline) null else TEXT_SHADOW)
                 return@Canvas
             }
 
             val sungColor = lerp(Color.White, activeColor, focus)
             val restColor = lerp(Color.White, unsungColor, focus)
+            val wordsList = words!!
 
-            // Base layer: whatever no word segment covers.
+            // Runs [draw] once per segment inside the word's pop and lift.
+            fun DrawScope.forEachSegment(draw: DrawScope.(segment: WordSegment, progress: Float, glow: Float) -> Unit) {
+                segments.forEach { segment ->
+                    val word = wordsList[segment.wordIndex]
+                    val duration = (word.endTime - word.startTime).coerceAtLeast(0.05)
+                    val since = positionSeconds - word.startTime
+                    val wordProgress = (since / duration).coerceIn(0.0, 1.0).toFloat()
+                    val span = (segment.fracEnd - segment.fracStart).coerceAtLeast(0.0001f)
+                    val progress = ((wordProgress - segment.fracStart) / span).coerceIn(0f, 1f)
+
+                    // Pop: rises over 120 ms, settles over the next 580 ms.
+                    val pop = when {
+                        since < 0 -> 0f
+                        since < 0.12 -> (since / 0.12).toFloat()
+                        since < 0.7 -> (1 - (since - 0.12) / 0.58).toFloat()
+                        else -> 0f
+                    }
+                    val rise = if (since <= 0) 0f else easeOutCubic((since / 0.35).toFloat().coerceIn(0f, 1f))
+                    val lift = -fontPx * 0.07f * rise * focus
+                    val wordScale = 1f + 0.05f * pop * focus
+
+                    // Glow only for held notes: grows with the word's length,
+                    // fades in and out at the word's edges.
+                    val hold = ((duration - 0.6) / 1.2).toFloat().coerceIn(0f, 1f)
+                    val edges = (wordProgress * 5f).coerceIn(0f, 1f) * ((1f - wordProgress) * 6f).coerceIn(0f, 1f)
+                    val glow = hold * edges * focus
+
+                    val segWidth = segment.layout.size.width.toFloat()
+                    val segHeight = segment.layout.size.height.toFloat()
+                    translate(segment.topLeft.x, segment.topLeft.y + lift) {
+                        scale(wordScale, wordScale, pivot = Offset(segWidth / 2f, segHeight)) {
+                            draw(segment, progress, glow)
+                        }
+                    }
+                }
+            }
+
+            // Two passes: every outline, shadow and glow first, then every
+            // fill. Drawing word by word put each word's shadow or outline
+            // over the glyphs of the word before it, a dark smudge that
+            // stayed on sung words (worst on CJK lines, one word per glyph).
+            // The base layer covers whatever no word segment covers.
             val holes = Path().apply { segments.forEach { addRect(it.bounds) } }
             clipPath(holes, ClipOp.Difference) {
                 if (outline) drawText(layout, color = OUTLINE_COLOR, drawStyle = stroke)
-                drawText(layout, color = restColor, shadow = shadow)
+                shadowLayout?.let { drawText(it, color = Color.Transparent) }
+            }
+            forEachSegment { segment, _, glow ->
+                if (outline) drawText(segment.layout, color = OUTLINE_COLOR, drawStyle = stroke)
+                if (glow > 0.02f) {
+                    val glowShadow = Shadow(activeColor.copy(alpha = 0.8f * glow), Offset.Zero, fontPx * 0.5f * glow)
+                    drawText(segment.shadowLayout ?: segment.layout, color = Color.Transparent, shadow = glowShadow)
+                } else {
+                    segment.shadowLayout?.let { drawText(it, color = Color.Transparent) }
+                }
             }
 
-            val wordsList = words!!
-            segments.forEach { segment ->
-                val word = wordsList[segment.wordIndex]
-                val duration = (word.endTime - word.startTime).coerceAtLeast(0.05)
-                val since = positionSeconds - word.startTime
-                val wordProgress = (since / duration).coerceIn(0.0, 1.0).toFloat()
-                val span = (segment.fracEnd - segment.fracStart).coerceAtLeast(0.0001f)
-                val progress = ((wordProgress - segment.fracStart) / span).coerceIn(0f, 1f)
-
-                // Pop: rises over 120 ms, settles over the next 580 ms.
-                val pop = when {
-                    since < 0 -> 0f
-                    since < 0.12 -> (since / 0.12).toFloat()
-                    since < 0.7 -> (1 - (since - 0.12) / 0.58).toFloat()
-                    else -> 0f
-                }
-                val rise = if (since <= 0) 0f else easeOutCubic((since / 0.35).toFloat().coerceIn(0f, 1f))
-                val lift = -fontPx * 0.07f * rise * focus
-                val wordScale = 1f + 0.05f * pop * focus
-
-                // Glow only for held notes: grows with the word's length,
-                // fades in and out at the word's edges.
-                val hold = ((duration - 0.6) / 1.2).toFloat().coerceIn(0f, 1f)
-                val edges = (wordProgress * 5f).coerceIn(0f, 1f) * ((1f - wordProgress) * 6f).coerceIn(0f, 1f)
-                val glow = hold * edges * focus
-                val fillShadow = if (glow > 0.02f) {
-                    Shadow(activeColor.copy(alpha = 0.8f * glow), Offset.Zero, fontPx * 0.5f * glow)
-                } else {
-                    shadow
-                }
-
-                val segWidth = segment.layout.size.width.toFloat()
-                val segHeight = segment.layout.size.height.toFloat()
-                translate(segment.topLeft.x, segment.topLeft.y + lift) {
-                    scale(wordScale, wordScale, pivot = Offset(segWidth / 2f, segHeight)) {
-                        if (outline) drawText(segment.layout, color = OUTLINE_COLOR, drawStyle = stroke)
-                        drawWipe(segment.layout, progress, segWidth, fontPx, sungColor, restColor, fillShadow)
-                    }
-                }
+            clipPath(holes, ClipOp.Difference) {
+                drawText(layout, color = restColor)
+            }
+            forEachSegment { segment, progress, _ ->
+                drawWipe(segment.layout, progress, segment.layout.size.width.toFloat(), fontPx, sungColor, restColor)
             }
         }
     }
@@ -628,11 +661,10 @@ private fun DrawScope.drawWipe(
     fontPx: Float,
     sung: Color,
     rest: Color,
-    shadow: Shadow?,
 ) {
     when {
-        progress >= 1f -> drawText(layout, color = sung, shadow = shadow)
-        progress <= 0f -> drawText(layout, color = rest, shadow = shadow)
+        progress >= 1f -> drawText(layout, color = sung)
+        progress <= 0f -> drawText(layout, color = rest)
         else -> {
             // The edge travels from fully left of the word to fully right, so
             // the fill starts and ends cleanly.
@@ -647,7 +679,6 @@ private fun DrawScope.drawWipe(
                     endX = front + edge,
                     tileMode = TileMode.Clamp,
                 ),
-                shadow = shadow,
             )
         }
     }
@@ -668,9 +699,11 @@ private fun buildSegments(
     layout: TextLayoutResult,
     style: TextStyle,
     measurer: TextMeasurer,
+    withShadow: Boolean,
 ): List<WordSegment> {
     val segments = mutableListOf<WordSegment>()
     val pieceStyle = style.copy(textAlign = TextAlign.Start)
+    val shadowStyle = pieceStyle.copy(shadow = TEXT_SHADOW)
     var searchFrom = 0
     words.forEachIndexed { wordIndex, word ->
         if (word.text.isBlank()) return@forEachIndexed
@@ -700,9 +733,11 @@ private fun buildSegments(
             }
             val top = layout.getLineTop(line)
             val bottom = layout.getLineBottom(line)
+            val piece = text.substring(pieceStart, pieceEnd)
             segments += WordSegment(
                 wordIndex = wordIndex,
-                layout = measurer.measure(text.substring(pieceStart, pieceEnd), pieceStyle, softWrap = false, maxLines = 1),
+                layout = measurer.measure(piece, pieceStyle, softWrap = false, maxLines = 1),
+                shadowLayout = if (withShadow) measurer.measure(piece, shadowStyle, softWrap = false, maxLines = 1) else null,
                 topLeft = Offset(left, top),
                 bounds = Rect(left, top, right, bottom),
                 fracStart = (pieceStart - start) / total,
