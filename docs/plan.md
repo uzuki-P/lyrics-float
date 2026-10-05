@@ -380,3 +380,9 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
       the intro and outro, and gaps with interval indicators disabled stay
       at their timeline position instead of scrolling to the first lyric.
       Long gaps still show the existing circular interval indicator.
+
+## 28. Karaoke descender outline
+
+- [x] Hide the base outline's stroke fringe around animated words so
+      descenders do not leave a stationary dark copy. Keep fill clipping,
+      animation, and playback behavior unchanged.

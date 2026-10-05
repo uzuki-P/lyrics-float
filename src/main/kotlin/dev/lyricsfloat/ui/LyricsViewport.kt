@@ -517,7 +517,7 @@ private fun LyricLine(
 }
 
 /** One word (or the part of it on one visual line), measured on its own. */
-private class WordSegment(
+internal class WordSegment(
     val wordIndex: Int,
     val layout: TextLayoutResult,
     /** Same piece with [TEXT_SHADOW] in its style, for the back pass; null with outlines. */
@@ -638,8 +638,12 @@ private fun KaraokeLineText(
             // over the glyphs of the word before it, a dark smudge that
             // stayed on sung words (worst on CJK lines, one word per glyph).
             // The base layer covers whatever no word segment covers.
-            val holes = Path().apply { segments.forEach { addRect(it.bounds) } }
-            clipPath(holes, ClipOp.Difference) {
+            val holes = karaokeBaseHoles(segments)
+            // The stroke extends outside the un-stroked word bounds. Hide
+            // that fringe too, or descenders leave a stationary dark copy
+            // behind when the karaoke word lifts. Keep fill clipping exact.
+            val backdropHoles = if (outline) karaokeBaseHoles(segments, outlinePx) else holes
+            clipPath(backdropHoles, ClipOp.Difference) {
                 if (outline) drawText(layout, color = OUTLINE_COLOR, drawStyle = stroke)
                 shadowLayout?.let { drawText(it, color = Color.Transparent) }
             }
@@ -703,7 +707,7 @@ private fun easeOutCubic(t: Float): Float {
  * Split each word into per-visual-line pieces with their own single-line
  * layouts, positioned where the full line layout put those characters.
  */
-private fun buildSegments(
+internal fun buildSegments(
     text: String,
     words: List<WordTimestamp>,
     layout: TextLayoutResult,
@@ -757,6 +761,14 @@ private fun buildSegments(
     }
     return segments
 }
+
+internal fun karaokeBaseHoles(segments: List<WordSegment>, outlinePx: Float = 0f): Path =
+    Path().apply {
+        // Bounds describe character advances, not ink. Allow for the stroke,
+        // bold glyph overhang (notably y), and one antialias pixel.
+        val padding = if (outlinePx > 0f) outlinePx + 1f else 0f
+        segments.forEach { addRect(it.bounds.inflate(padding)) }
+    }
 
 /**
  * Lyric text with an outline instead of a shadow: a stroked back layer under
