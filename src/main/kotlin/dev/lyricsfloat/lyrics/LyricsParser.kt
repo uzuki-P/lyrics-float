@@ -13,8 +13,9 @@ data class WordTimestamp(
 /**
  * One lyric line, timed in milliseconds like Metrolist's LyricsEntry. Carries
  * everything extended LRC can express: word timings, the singing agent
- * (v1/v2/v1000), and the background-vocal flag. Romanization lands lazily in
- * [romanizedTextFlow] so lines can update without reparsing.
+ * (v1/v2/v1000), and the background-vocal flag. Romanization and translation
+ * land lazily in [romanizedTextFlow] and [translatedTextFlow] so lines can
+ * update without reparsing.
  */
 data class LyricsEntry(
     val time: Long,
@@ -23,6 +24,7 @@ data class LyricsEntry(
     val agent: String? = null,
     val isBackground: Boolean = false,
     val romanizedTextFlow: MutableStateFlow<String?> = MutableStateFlow(null),
+    val translatedTextFlow: MutableStateFlow<String?> = MutableStateFlow(null),
 ) : Comparable<LyricsEntry> {
     override fun compareTo(other: LyricsEntry): Int = time.compareTo(other.time)
 

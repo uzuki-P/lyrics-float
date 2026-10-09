@@ -19,41 +19,43 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.lyrics.LyricsParser
+import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.lyrics.LyricsTiming
 import dev.lyricsfloat.lyrics.ManualSearch
 import dev.lyricsfloat.lyrics.ManualSearchResult
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -123,6 +125,9 @@ fun SearchView(
     var expandedKey by remember { mutableStateOf<String?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     var previewError by remember { mutableStateOf<String?>(null) }
+    // Lyrics or the provider's raw text (timestamps, word tags); one choice
+    // for every row while the dialog is open.
+    var rawPreview by remember { mutableStateOf(false) }
     var previewJob by remember { mutableStateOf<Job?>(null) }
 
     // Manual-entry sub-page. Keyed like [query]: a song change leaves the form.
@@ -375,6 +380,8 @@ fun SearchView(
                             timing = previewCache[rowKey]?.timing ?: result.timing
                                 ?: if (result.synced == false) LyricsTiming.PLAIN else null,
                             preview = previewCache[rowKey],
+                            rawPreview = rawPreview,
+                            onRawPreviewChange = { rawPreview = it },
                             previewOpen = expandedKey == rowKey,
                             previewLoading = expandedKey == rowKey && previewLoading,
                             previewError = previewError.takeIf { expandedKey == rowKey },
@@ -511,6 +518,8 @@ private fun SearchResultRow(
     result: ManualSearchResult,
     timing: LyricsTiming?,
     preview: LyricsPreview?,
+    rawPreview: Boolean,
+    onRawPreviewChange: (Boolean) -> Unit,
     previewOpen: Boolean,
     previewLoading: Boolean,
     previewError: String?,
@@ -641,21 +650,34 @@ private fun SearchResultRow(
                     MessageTone.ERROR,
                     Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
                 )
-                preview != null -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
-                        .heightIn(max = 230.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(palette.surface.copy(alpha = 0.6f))
-                        .verticalScroll(rememberScrollState())
-                        .padding(10.dp),
-                ) {
-                    Text(
-                        preview.text,
-                        style = TextStyle(fontSize = 11.sp, lineHeight = 17.sp),
-                        color = palette.onSurface,
+                preview != null -> Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+                    SegmentedControl(
+                        options = listOf(false to "Lyrics", true to "Raw"),
+                        selected = rawPreview,
+                        onSelect = onRawPreviewChange,
+                        modifier = Modifier.padding(bottom = 6.dp),
                     )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 230.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(palette.surface.copy(alpha = 0.6f))
+                            .verticalScroll(rememberScrollState())
+                            .padding(10.dp),
+                    ) {
+                        SelectionContainer {
+                            Text(
+                                if (rawPreview) preview.rawText else preview.text,
+                                style = if (rawPreview) {
+                                    TextStyle(fontSize = 10.5.sp, lineHeight = 16.sp, fontFamily = FontFamily.Monospace)
+                                } else {
+                                    TextStyle(fontSize = 11.sp, lineHeight = 17.sp)
+                                },
+                                color = palette.onSurface,
+                            )
+                        }
+                    }
                 }
             }
         }

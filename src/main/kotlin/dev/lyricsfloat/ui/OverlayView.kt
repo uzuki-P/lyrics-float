@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.lyricsfloat.AppSettings
 import dev.lyricsfloat.lyrics.LyricsState
+import dev.lyricsfloat.lyrics.translation.TranslationStatus
 import dev.lyricsfloat.lyrics.withIntervalIndicators
 import dev.lyricsfloat.mpris.ActivePlayback
 import kotlinx.coroutines.isActive
@@ -85,6 +86,8 @@ fun OverlayView(
     onSettings: () -> Unit,
     onTiming: () -> Unit,
     onToggleClickPassThrough: () -> Unit,
+    translationStatus: TranslationStatus,
+    onToggleTranslate: () -> Unit,
     dragModifier: Modifier,
     resizeZones: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
@@ -159,11 +162,13 @@ fun OverlayView(
                     offsetMs = offsetMs,
                     fontSizeSp = settings.fontSizeSp,
                     romajiFontSizeSp = settings.romajiFontSizeSp,
+                    translationFontSizeSp = settings.translationFontSizeSp,
                     autoScrollDefault = settings.autoScroll,
                     showIntervalIndicator = settings.showIntervalIndicator,
                     respectAgentPositioning = settings.respectAgentPositioning,
                     wordKaraoke = settings.wordKaraoke,
                     romanizeJapanese = settings.romanizeJapanese,
+                    showTranslation = settings.translateEnabled,
                     textPosition = settings.textPosition,
                     textOutline = settings.textOutline,
                     // Keep the Sync button clear of the hover bar.
@@ -190,6 +195,9 @@ fun OverlayView(
                 onSettings = onSettings,
                 onTiming = onTiming,
                 onToggleClickPassThrough = onToggleClickPassThrough,
+                translateEnabled = settings.translateEnabled,
+                translationStatus = translationStatus,
+                onToggleTranslate = onToggleTranslate,
                 dragModifier = dragModifier,
             )
         }
@@ -254,6 +262,9 @@ private fun HoverBar(
     onSettings: () -> Unit,
     onTiming: () -> Unit,
     onToggleClickPassThrough: () -> Unit,
+    translateEnabled: Boolean,
+    translationStatus: TranslationStatus,
+    onToggleTranslate: () -> Unit,
     dragModifier: Modifier,
 ) {
     val palette = LocalAppPalette.current
@@ -304,6 +315,19 @@ private fun HoverBar(
             selected = songOffsetMs != 0L,
             size = 28.dp,
             iconSize = 17.dp,
+        )
+        IconAction(
+            AppIcons.Translate,
+            when {
+                !translateEnabled -> "Translate lyrics: off"
+                translationStatus is TranslationStatus.Translating -> "Translating lyrics…"
+                translationStatus is TranslationStatus.Error -> "Translation failed: ${translationStatus.message}"
+                else -> "Translate lyrics: on"
+            },
+            onToggleTranslate,
+            selected = translateEnabled,
+            size = 28.dp,
+            iconSize = 16.dp,
         )
         IconAction(AppIcons.Tune, "Settings", onSettings, size = 28.dp, iconSize = 17.dp)
         IconAction(

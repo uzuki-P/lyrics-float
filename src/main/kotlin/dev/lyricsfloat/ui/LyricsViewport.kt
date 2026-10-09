@@ -119,11 +119,13 @@ internal fun LyricsViewport(
     offsetMs: Long,
     fontSizeSp: Int,
     romajiFontSizeSp: Int,
+    translationFontSizeSp: Int,
     autoScrollDefault: Boolean,
     showIntervalIndicator: Boolean,
     respectAgentPositioning: Boolean,
     wordKaraoke: Boolean,
     romanizeJapanese: Boolean,
+    showTranslation: Boolean,
     textPosition: LyricsTextPosition,
     textOutline: Boolean,
     syncAlignment: Alignment,
@@ -343,8 +345,10 @@ internal fun LyricsViewport(
                                 synced = lyrics.synced,
                                 fontSizeSp = fontSizeSp,
                                 romajiFontSizeSp = romajiFontSizeSp,
+                                translationFontSizeSp = translationFontSizeSp,
                                 wordKaraoke = wordKaraoke,
                                 romanizeJapanese = romanizeJapanese,
+                                showTranslation = showTranslation,
                                 textOutline = textOutline,
                                 outlinePx = outlinePx,
                                 align = alignFor(item.entry.agent, respectAgentPositioning, textPosition),
@@ -389,7 +393,7 @@ internal fun LyricsViewport(
 }
 
 /**
- * One line plus its romaji sub-line. Every line is laid out at the active
+ * One line plus its romaji and translation sub-lines. Every line is laid out at the active
  * size; lines out of focus shrink through a graphics layer, so focus changes
  * animate on a spring instead of re-wrapping text at a new font size. The
  * layout height follows the scale, keeping the stack tight.
@@ -406,8 +410,10 @@ private fun LyricLine(
     synced: Boolean,
     fontSizeSp: Int,
     romajiFontSizeSp: Int,
+    translationFontSizeSp: Int,
     wordKaraoke: Boolean,
     romanizeJapanese: Boolean,
+    showTranslation: Boolean,
     textOutline: Boolean,
     outlinePx: Float,
     align: TextAlign,
@@ -416,6 +422,7 @@ private fun LyricLine(
     val density = LocalDensity.current
     val romanized by entry.romanizedTextFlow.collectAsState()
     val showRomaji = romanizeJapanese && !romanized.isNullOrBlank()
+    val translated by entry.translatedTextFlow.collectAsState()
 
     // Slightly underdamped: the line overshoots its size a touch as it lands.
     val focus by animateFloatAsState(
@@ -511,6 +518,26 @@ private fun LyricLine(
                 maxLines = Int.MAX_VALUE,
                 outline = textOutline,
                 outlinePx = outlinePx * 0.6f,
+            )
+        }
+
+        // Metrolist draws the translation last, smaller and fainter than the
+        // romanization.
+        val translation = translated
+        if (showTranslation && !translation.isNullOrBlank()) {
+            LyricText(
+                text = translation,
+                style = TextStyle(
+                    fontSize = translationFontSizeSp.sp,
+                    fontWeight = FontWeight.Normal,
+                    lineHeight = (translationFontSizeSp * 1.3).sp,
+                ),
+                color = lerp(Color.White.copy(alpha = 0.65f), activeColor.copy(alpha = 0.75f), colorFocus),
+                align = align,
+                maxLines = Int.MAX_VALUE,
+                outline = textOutline,
+                outlinePx = outlinePx * 0.6f,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }

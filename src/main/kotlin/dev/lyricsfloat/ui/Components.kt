@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +28,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -35,6 +38,8 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +53,8 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -460,6 +467,8 @@ internal fun AppTextField(
     singleLine: Boolean = true,
     fontSize: TextUnit = 13.sp,
     onSubmit: (() -> Unit)? = null,
+    /** Masks the text, for API keys. */
+    secret: Boolean = false,
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val palette = LocalAppPalette.current
@@ -482,6 +491,7 @@ internal fun AppTextField(
             singleLine = singleLine,
             keyboardOptions = KeyboardOptions(imeAction = if (onSubmit != null) ImeAction.Search else ImeAction.Default),
             keyboardActions = KeyboardActions(onSearch = { onSubmit?.invoke() }),
+            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
             textStyle = TextStyle(fontSize = fontSize, color = palette.onSurface, lineHeight = fontSize * 1.45f),
             cursorBrush = SolidColor(palette.accent),
             modifier = fieldModifier
@@ -498,6 +508,69 @@ internal fun AppTextField(
             },
         )
         trailing?.invoke(this)
+    }
+}
+
+/**
+ * Single-choice dropdown for lists too long for a [SegmentedControl]
+ * (languages, providers, models). Shows [placeholder] while nothing matches.
+ */
+@Composable
+internal fun <T> AppDropdown(
+    options: List<Pair<T, String>>,
+    selected: T?,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "Choose…",
+) {
+    val palette = LocalAppPalette.current
+    var expanded by remember { mutableStateOf(false) }
+    val (source, hovered) = rememberHoverSource()
+    Box(modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(ControlShape)
+                .background(if (hovered) palette.cardHover else palette.card)
+                .border(1.dp, palette.outline, ControlShape)
+                .pointerHoverIcon(PointerIcon.Hand)
+                .clickable(interactionSource = source, indication = null) { expanded = true }
+                .padding(start = 11.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                options.firstOrNull { it.first == selected }?.second ?: placeholder,
+                style = AppType.label,
+                color = if (options.any { it.first == selected }) palette.onSurface else palette.onSurfaceFaint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(AppIcons.ExpandMore, contentDescription = null, tint = palette.onSurfaceDim, modifier = Modifier.size(16.dp))
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = palette.surface,
+            modifier = Modifier.heightIn(max = 320.dp),
+        ) {
+            options.forEach { (value, label) ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            label,
+                            style = if (value == selected) AppType.bodyStrong else AppType.body,
+                            color = if (value == selected) palette.accent else palette.onSurface,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(value)
+                    },
+                    modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
+                )
+            }
+        }
     }
 }
 

@@ -132,6 +132,39 @@ object AppState {
 
     fun saveTextOutline(value: Boolean) = writeField("lyrics.textOutline", value.toString())
 
+    // ----- translation -----
+
+    fun loadTranslateEnabled(): Boolean = readField("translate.enabled") == "true"
+
+    fun saveTranslateEnabled(value: Boolean) = writeField("translate.enabled", value.toString())
+
+    fun loadTranslationFontSizeSp(): Int = readField("translate.fontSize")?.toIntOrNull()?.takeIf { it in 8..30 } ?: 13
+
+    fun saveTranslationFontSizeSp(size: Int) = writeField("translate.fontSize", size.coerceIn(8, 30).toString())
+
+    /**
+     * Free text such as the custom system prompt. The file holds one entry per
+     * line, so newlines and backslashes are escaped.
+     */
+    fun loadText(key: String): String = readField(key)?.let(::unescape).orEmpty()
+
+    fun saveText(key: String, value: String) =
+        writeField(key, value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", ""))
+
+    private fun unescape(value: String): String = buildString {
+        var index = 0
+        while (index < value.length) {
+            val char = value[index]
+            if (char == '\\' && index + 1 < value.length) {
+                append(if (value[index + 1] == 'n') '\n' else value[index + 1])
+                index += 2
+            } else {
+                append(char)
+                index++
+            }
+        }
+    }
+
     // ----- behavior -----
 
     fun loadAutoHide(): Boolean = readField("behavior.autoHide") != "false"
@@ -149,6 +182,9 @@ object AppState {
         if (identity.isNullOrBlank()) writeField("players.preferred", "") else writeField("players.preferred", identity)
     }
 
+    // The UI thread and IO work (T3 Code sign-in) both write settings; the
+    // read-copy-commit cycle must not interleave or one write is lost.
+    @Synchronized
     private fun read(): Map<String, String> {
         cached?.let { return it }
         val map = if (file.exists()) {
@@ -167,6 +203,7 @@ object AppState {
 
     private fun readField(key: String): String? = read()[key]
 
+    @Synchronized
     private fun writeField(key: String, value: String) {
         val updated = read().toMutableMap()
         updated[key] = value
@@ -178,6 +215,11 @@ object AppState {
         runCatching {
             val tmp = File(dir, file.name + ".tmp")
             tmp.writeText(updated.entries.joinToString("\n") { "${it.key}=${it.value}" })
+            // API keys and the T3 Code session live here: owner-only.
+            tmp.setReadable(false, false)
+            tmp.setReadable(true, true)
+            tmp.setWritable(false, false)
+            tmp.setWritable(true, true)
             if (!tmp.renameTo(file)) {
                 file.writeText(tmp.readText())
                 tmp.delete()

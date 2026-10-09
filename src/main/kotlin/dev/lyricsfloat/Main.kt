@@ -35,6 +35,8 @@ import androidx.compose.ui.window.rememberWindowState
 import dev.lyricsfloat.lyrics.LrcLib
 import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.lyrics.LyricsRepository
+import dev.lyricsfloat.lyrics.LyricsState
+import dev.lyricsfloat.lyrics.translation.LyricsTranslator
 import dev.lyricsfloat.lyrics.SongOffsets
 import dev.lyricsfloat.lyrics.currentIndexAt
 import dev.lyricsfloat.lyrics.songKey
@@ -85,6 +87,20 @@ fun main() = application {
     val lyrics by repository.current.collectAsState()
     val lyricsLoading by repository.loading.collectAsState()
     var enabledProviders by remember { mutableStateOf(LyricsProviders.enabledNames()) }
+
+    // Translation follows the shown lyrics and every setting that changes the
+    // output. A song change applies at once; a settings change waits until
+    // typing in the text fields (API key, model, prompt) pauses, so partial
+    // model ids do not each cost a request.
+    val translator = remember { LyricsTranslator(scope) }
+    val translationStatus by translator.status.collectAsState()
+    val translationConfig = settings.translationConfig()
+    var translatedLyrics by remember { mutableStateOf<LyricsState?>(null) }
+    LaunchedEffect(lyrics, translationConfig) {
+        delay(if (lyrics !== translatedLyrics) 300 else 1500)
+        translatedLyrics = lyrics
+        translator.update(lyrics, translationConfig)
+    }
 
     // Per-song offsets add on top of the global one.
     val songOffsets = remember {
@@ -247,6 +263,8 @@ fun main() = application {
                 onSettings = { settingsVisible = true },
                 onTiming = { timingVisible = true },
                 onToggleClickPassThrough = toggleClickPassThrough,
+                translationStatus = translationStatus,
+                onToggleTranslate = { settings.translateEnabled = !settings.translateEnabled },
                 dragModifier = Modifier.windowDragHandle(window) {
                     customPosition = Point(window.x, window.y)
                     AppState.saveOverlayPosition(window.x, window.y)
@@ -316,6 +334,8 @@ fun main() = application {
                 customPosition = null
             },
             onOpenTiming = { timingVisible = true },
+            translationStatus = translationStatus,
+            onRetranslate = { translator.update(repository.current.value, settings.translationConfig(), force = true) },
             onClose = { settingsVisible = false },
             dragHandleModifier = dragHandle,
         )

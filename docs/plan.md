@@ -86,6 +86,9 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Search results show word, line, or plain timing when known and load an
       expandable lyrics preview on demand. Search and settings dialogs have
       resize handles.
+- [x] The preview switches between the parsed lyrics and the provider's raw
+      text (timestamps, word tags, agent markers) in monospace; both are
+      selectable.
 
 ## 6. Lyrics animation (Metrolist-style)
 
@@ -130,8 +133,7 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Add a Start on login setting using an XDG autostart entry for the
       installed launcher or AppImage; refresh its path on launch.
 
-- Translation (OpenRouter/DeepL) — Metrolist has it, desktop port pending a
-  decisions pass on API keys.
+- [x] Translation: ported in section 29.
 - Romaji for Korean/Chinese/Cyrillic — JP only until the user asks.
 - YouTube / YouTube-subtitle providers — need a videoId, which MPRIS metadata
   rarely carries.
@@ -386,3 +388,27 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Hide the base outline's stroke fringe around animated words so
       descenders do not leave a stationary dark copy. Keep fill clipping,
       animation, and playback behavior unchanged.
+
+## 29. Lyrics translation (Metrolist AI translation + T3 Code)
+
+- [x] `lyrics/translation/`: Metrolist's prompts (Literal / Transcribed,
+      `{lineCount}` system prompt, custom prompt), JSON `{"lines": [...]}`
+      parsing with fence/array/plain fallbacks, padded to the line count.
+- [x] Providers: OpenRouter, OpenAI, Claude, Gemini, Perplexity, xAI,
+      Mistral, Inception and Custom (chat completions with a JSON schema;
+      Claude uses the native Messages API), DeepL (free `:fx` keys, formality),
+      and T3 Code. Metrolist's 3 retries on network errors and 5xx.
+- [x] T3 Code: `t3 auth session issue` mints an orchestration read/operate
+      session on first use (and again when it expires). The catalog
+      (`server.getConfig`) fills the agent, model and reasoning pickers.
+      Each translation launches a one-shot thread in the "No project"
+      scratch folder over the Effect RPC WebSocket, polls the thread
+      snapshot over HTTP, and always stops and deletes the thread.
+- [x] One request per song with every non-blank line; results land in
+      `LyricsEntry.translatedTextFlow` and render under the romaji
+      (separate text size). Cached in memory and under
+      `$XDG_DATA_HOME/lyricsfloat/translations`, keyed by the lyrics and
+      every output-changing setting.
+- [x] Settings → Translate tab; translate toggle in the hover bar shows the
+      status. Translation runs automatically per song while enabled.
+

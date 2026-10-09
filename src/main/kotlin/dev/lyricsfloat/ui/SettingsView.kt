@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import dev.lyricsfloat.AppSettings
 import dev.lyricsfloat.lyrics.BuildVersion
 import dev.lyricsfloat.lyrics.LyricsProviders
+import dev.lyricsfloat.lyrics.translation.TranslationStatus
 import dev.lyricsfloat.mpris.PlayerInfo
 import dev.lyricsfloat.platform.Autostart
 import dev.lyricsfloat.platform.WindowAnchor
@@ -46,6 +47,7 @@ private enum class SettingsTab(val label: String) {
     LYRICS("Lyrics"),
     OVERLAY("Overlay"),
     SOURCES("Sources"),
+    TRANSLATE("Translate"),
 }
 
 private fun WindowAnchor.label(): String = when (this) {
@@ -60,10 +62,11 @@ private fun WindowAnchor.label(): String = when (this) {
 }
 
 /**
- * Settings dialog, split into three tabs so no page needs a long scroll:
+ * Settings dialog, split into tabs so no page needs a long scroll:
  * Lyrics follows Metrolist's lyrics settings (text, behavior toggles, sync
  * offset), Overlay holds the pill's look and window behavior, Sources picks
- * the MPRIS player and the provider chain. Every change applies live.
+ * the MPRIS player and the provider chain, Translate holds the lyrics
+ * translation provider. Every change applies live.
  */
 @Composable
 fun SettingsView(
@@ -74,6 +77,8 @@ fun SettingsView(
     onAnchorChange: (WindowAnchor) -> Unit,
     onResetOverlayPosition: () -> Unit,
     onOpenTiming: () -> Unit,
+    translationStatus: TranslationStatus,
+    onRetranslate: () -> Unit,
     onClose: () -> Unit,
     dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
@@ -108,6 +113,7 @@ fun SettingsView(
                 SettingsTab.LYRICS -> LyricsTab(settings, onOpenTiming)
                 SettingsTab.OVERLAY -> OverlayTab(settings, onAnchorChange, onResetOverlayPosition)
                 SettingsTab.SOURCES -> SourcesTab(settings, players, enabledProviders, onProviderEnabledChange)
+                SettingsTab.TRANSLATE -> TranslateTab(settings, translationStatus, onRetranslate)
             }
             Spacer(Modifier.height(2.dp))
         }
