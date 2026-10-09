@@ -47,6 +47,8 @@ internal fun TranslateTab(
     settings: AppSettings,
     status: TranslationStatus,
     onRetranslate: () -> Unit,
+    romajiStatus: TranslationStatus,
+    onReromanize: () -> Unit,
 ) {
     val provider = settings.translationProvider
 
@@ -89,6 +91,40 @@ internal fun TranslateTab(
             steps = 21,
             onValueChange = { settings.translationFontSizeSp = it.roundToInt() },
         )
+    }
+
+    SettingsGroup(
+        "Romaji",
+        footer = "Japanese songs only. The offline romaji shows until the AI romaji arrives, " +
+            "and stays if the request fails. Results are cached per song.",
+    ) {
+        ToggleRow(
+            "AI romaji",
+            settings.aiRomaji,
+            { settings.aiRomaji = it },
+            description = when {
+                !settings.romanizeJapanese -> "Turn on \"Romanize Japanese lyrics\" in the Lyrics tab first"
+                provider.api == TranslationApi.DEEPL -> "DeepL cannot romanize; pick an AI provider below"
+                else -> "Reads kanji in context with the provider below, even while translation is off"
+            },
+        )
+        if (settings.romajiConfig() != null) {
+            val (text, tone) = when (romajiStatus) {
+                TranslationStatus.Idle -> "No Japanese lyrics playing" to MessageTone.INFO
+                TranslationStatus.Translating -> "Romanizing this song…" to MessageTone.ACCENT
+                TranslationStatus.Done -> "This song has AI romaji" to MessageTone.INFO
+                is TranslationStatus.Error -> "${romajiStatus.message} (using offline romaji)" to MessageTone.ERROR
+            }
+            InlineMessage(text, tone, modifier = Modifier.padding(bottom = 6.dp)) {
+                AppButton(
+                    "Romanize again",
+                    onClick = onReromanize,
+                    kind = ButtonKind.GHOST,
+                    enabled = romajiStatus !is TranslationStatus.Translating,
+                    compact = true,
+                )
+            }
+        }
     }
 
     SettingsGroup(

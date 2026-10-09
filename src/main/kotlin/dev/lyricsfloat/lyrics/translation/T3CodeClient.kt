@@ -181,16 +181,20 @@ object T3CodeClient {
         withRpc(token) { rpc -> parseCatalog(rpc.call("server.getConfig", JsonObject(emptyMap()))) }
     }
 
-    suspend fun translate(lines: List<String>, config: TranslationConfig): List<String> {
+    suspend fun translate(lines: List<String>, config: TranslationConfig): List<String> =
+        complete(TranslationPrompt.forTranslation(lines, config), config)
+
+    /** Runs any line prompt (translation or romaji) in a one-shot thread. */
+    suspend fun complete(prompt: LinePrompt, config: TranslationConfig): List<String> {
         val selection = config.t3 ?: throw TranslationException("Pick a T3 Code model in Settings")
-        val prompt = buildString {
-            append(TranslationPrompt.systemPrompt(lines.size, config.systemPrompt))
+        val text = buildString {
+            append(prompt.system)
             append("\n\n")
-            append(TranslationPrompt.userPrompt(lines, config.languageCode, config.mode))
+            append(prompt.user)
             append("\n\nReply with the JSON object only. Do not use tools, run commands, or read files.")
         }
-        val reply = withSession { token -> runOneShotThread(token, prompt, selection) }
-        return TranslationPrompt.parseLines(reply, lines.size).getOrElse { throw TranslationException(it.message ?: "Bad reply") }
+        val reply = withSession { token -> runOneShotThread(token, text, selection) }
+        return TranslationPrompt.parseLines(reply, prompt.lineCount).getOrElse { throw TranslationException(it.message ?: "Bad reply") }
     }
 
     /** Runs [block] with the saved token, minting a fresh one once if the server rejects it. */

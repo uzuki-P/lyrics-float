@@ -7,7 +7,7 @@ import kotlinx.coroutines.runBlocking
 
 /**
  * Round trip against the T3 Code server running on this machine: connect,
- * list the catalog, translate through a one-shot thread. Skipped unless
+ * list the catalog, translate and romanize through one-shot threads. Skipped unless
  * LYRICS_FLOAT_LIVE_T3=1. Point XDG_CONFIG_HOME at a scratch directory so the
  * minted session does not land in the real settings file.
  */
@@ -35,6 +35,11 @@ class T3CodeLiveTest {
             println("T3 translation: $lines")
             assertEquals(2, lines.size)
             assertTrue(lines.all { it.isNotBlank() })
+
+            val romaji = T3CodeClient.complete(RomajiPrompt.forLines(listOf("一人で歩いてた", "今日も明日も")), config)
+            println("T3 romaji: $romaji")
+            assertEquals(2, romaji.size)
+            assertTrue(romaji[0].startsWith("hitori"))
         }
     }
 }

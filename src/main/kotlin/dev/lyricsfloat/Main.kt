@@ -94,12 +94,20 @@ fun main() = application {
     // model ids do not each cost a request.
     val translator = remember { LyricsTranslator(scope) }
     val translationStatus by translator.status.collectAsState()
+    val romajiStatus by translator.romajiStatus.collectAsState()
     val translationConfig = settings.translationConfig()
     var translatedLyrics by remember { mutableStateOf<LyricsState?>(null) }
     LaunchedEffect(lyrics, translationConfig) {
         delay(if (lyrics !== translatedLyrics) 300 else 1500)
         translatedLyrics = lyrics
         translator.update(lyrics, translationConfig)
+    }
+    val romajiConfig = settings.romajiConfig()
+    var romanizedLyrics by remember { mutableStateOf<LyricsState?>(null) }
+    LaunchedEffect(lyrics, romajiConfig) {
+        delay(if (lyrics !== romanizedLyrics) 300 else 1500)
+        romanizedLyrics = lyrics
+        translator.updateRomaji(lyrics, romajiConfig)
     }
 
     // Per-song offsets add on top of the global one.
@@ -336,6 +344,8 @@ fun main() = application {
             onOpenTiming = { timingVisible = true },
             translationStatus = translationStatus,
             onRetranslate = { translator.update(repository.current.value, settings.translationConfig(), force = true) },
+            romajiStatus = romajiStatus,
+            onReromanize = { translator.updateRomaji(repository.current.value, settings.romajiConfig(), force = true) },
             onClose = { settingsVisible = false },
             dragHandleModifier = dragHandle,
         )

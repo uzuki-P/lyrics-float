@@ -420,7 +420,11 @@ private fun LyricLine(
     onFullHeight: (Int) -> Unit,
 ) {
     val density = LocalDensity.current
-    val romanized by entry.romanizedTextFlow.collectAsState()
+    val offlineRomanized by entry.romanizedTextFlow.collectAsState()
+    val aiRomanized by entry.aiRomanizedTextFlow.collectAsState()
+    // AI romaji reads kanji in context; the offline romaji fills in until it
+    // arrives and wherever it fails.
+    val romanized = aiRomanized ?: offlineRomanized
     val showRomaji = romanizeJapanese && !romanized.isNullOrBlank()
     val translated by entry.translatedTextFlow.collectAsState()
 

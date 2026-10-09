@@ -79,6 +79,8 @@ fun SettingsView(
     onOpenTiming: () -> Unit,
     translationStatus: TranslationStatus,
     onRetranslate: () -> Unit,
+    romajiStatus: TranslationStatus,
+    onReromanize: () -> Unit,
     onClose: () -> Unit,
     dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
@@ -113,7 +115,7 @@ fun SettingsView(
                 SettingsTab.LYRICS -> LyricsTab(settings, onOpenTiming)
                 SettingsTab.OVERLAY -> OverlayTab(settings, onAnchorChange, onResetOverlayPosition)
                 SettingsTab.SOURCES -> SourcesTab(settings, players, enabledProviders, onProviderEnabledChange)
-                SettingsTab.TRANSLATE -> TranslateTab(settings, translationStatus, onRetranslate)
+                SettingsTab.TRANSLATE -> TranslateTab(settings, translationStatus, onRetranslate, romajiStatus, onReromanize)
             }
             Spacer(Modifier.height(2.dp))
         }

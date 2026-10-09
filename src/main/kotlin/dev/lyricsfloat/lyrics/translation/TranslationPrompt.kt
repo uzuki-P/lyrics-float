@@ -29,6 +29,9 @@ object TranslationLanguages {
         Locale.forLanguageTag(code).getDisplayName(Locale.ENGLISH).takeIf { it.isNotBlank() } ?: code
 }
 
+/** One LLM request: the prompts plus the line count the reply must have. */
+data class LinePrompt(val system: String, val user: String, val lineCount: Int)
+
 /**
  * Prompt text and response parsing, ported from Metrolist's
  * OpenRouterService.buildTranslationRequest / parseTranslationContent. Every
@@ -46,6 +49,12 @@ CRITICAL RULES:
 4. Preserve empty lines as empty strings ""
 5. The "lines" array must contain EXACTLY {lineCount} items
 6. If uncertain, provide best approximation but maintain line count"""
+
+    fun forTranslation(lines: List<String>, config: TranslationConfig): LinePrompt = LinePrompt(
+        system = systemPrompt(lines.size, config.systemPrompt),
+        user = userPrompt(lines, config.languageCode, config.mode),
+        lineCount = lines.size,
+    )
 
     fun systemPrompt(lineCount: Int, customPrompt: String): String =
         customPrompt.takeIf(String::isNotBlank).let { it ?: DEFAULT_SYSTEM_PROMPT }
@@ -125,5 +134,41 @@ Output MUST be a JSON object {"lines": [...]} with EXACTLY $lineCount strings.""
             else -> null
         } ?: return null
         return array.map { (it as? JsonPrimitive)?.contentOrNull.orEmpty() }
+    }
+}
+
+/**
+ * Japanese romaji from an LLM. Kuromoji reads every token on its own, so
+ * compounds, counters and kanji with several readings (一人, 今日, 風, 心)
+ * often come out wrong; a model reads the whole line in context. The output
+ * matches the offline converter's style (lowercase Hepburn, spaced words), so
+ * the two can stand in for each other line by line.
+ */
+object RomajiPrompt {
+    /** Bump when the prompt changes so cached romaji is refetched. */
+    const val VERSION = 1
+
+    fun forLines(lines: List<String>): LinePrompt {
+        val count = lines.size
+        return LinePrompt(
+            system = TranslationPrompt.systemPrompt(count, ""),
+            user = """Romanize the following $count lines of Japanese song lyrics into romaji.
+
+CRITICAL REQUIREMENTS:
+- Do NOT translate. Write how each line is sung, in modified Hepburn romaji
+- Read kanji in the context of the whole line and song; use the natural reading of compounds (一人 → hitori, 今日 → kyou, 明日 → ashita)
+- Lowercase only, words separated by single spaces
+- Particles as pronounced: は → wa, へ → e, を → wo
+- Long vowels as spelled, without macrons (ou, uu, ei, ee)
+- Small っ doubles the next consonant
+- Keep English words, numbers and punctuation as they are
+- Preserve line-by-line structure exactly
+
+Input ($count lines):
+${lines.joinToString("\n")}
+
+Output MUST be a JSON object {"lines": [...]} with EXACTLY $count strings.""",
+            lineCount = count,
+        )
     }
 }

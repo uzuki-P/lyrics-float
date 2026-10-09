@@ -15,7 +15,8 @@ data class WordTimestamp(
  * everything extended LRC can express: word timings, the singing agent
  * (v1/v2/v1000), and the background-vocal flag. Romanization and translation
  * land lazily in [romanizedTextFlow] and [translatedTextFlow] so lines can
- * update without reparsing.
+ * update without reparsing. [aiRomanizedTextFlow] holds romaji from the
+ * translation provider; the UI prefers it over the offline [romanizedTextFlow].
  */
 data class LyricsEntry(
     val time: Long,
@@ -25,6 +26,7 @@ data class LyricsEntry(
     val isBackground: Boolean = false,
     val romanizedTextFlow: MutableStateFlow<String?> = MutableStateFlow(null),
     val translatedTextFlow: MutableStateFlow<String?> = MutableStateFlow(null),
+    val aiRomanizedTextFlow: MutableStateFlow<String?> = MutableStateFlow(null),
 ) : Comparable<LyricsEntry> {
     override fun compareTo(other: LyricsEntry): Int = time.compareTo(other.time)
 

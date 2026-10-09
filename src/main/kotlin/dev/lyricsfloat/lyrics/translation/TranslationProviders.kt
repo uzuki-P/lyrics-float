@@ -113,6 +113,20 @@ data class TranslationConfig(
         TranslationApi.T3_CODE -> "t3|${t3?.instanceId}|${t3?.model}|${t3?.effort}|$languageCode|${mode.name}|$systemPrompt"
         else -> "${provider.name}|$model|$baseUrl|$languageCode|${mode.name}|$systemPrompt"
     }
+
+    /** True when an LLM call can be made: DeepL cannot romanize, and keys or a T3 model must be set. */
+    fun canComplete(): Boolean = when (provider.api) {
+        TranslationApi.DEEPL -> false
+        TranslationApi.T3_CODE -> t3 != null
+        TranslationApi.CHAT_COMPLETIONS -> if (provider == TranslationProvider.CUSTOM) baseUrl.isNotBlank() else apiKey.isNotBlank()
+        TranslationApi.ANTHROPIC -> apiKey.isNotBlank()
+    }
+
+    /** The model that answers a romaji request; language, mode and prompt do not matter. */
+    fun romajiIdentity(): String = when (provider.api) {
+        TranslationApi.T3_CODE -> "t3|${t3?.instanceId}|${t3?.model}|${t3?.effort}"
+        else -> "${provider.name}|$model|$baseUrl"
+    }
 }
 
 class TranslationException(message: String) : Exception(message)
@@ -138,9 +152,15 @@ private val USER_AGENT = "Lyrics Float v${BuildVersion.VERSION} ($REFERER)"
  */
 internal object HttpTranslators {
     suspend fun translate(lines: List<String>, config: TranslationConfig): List<String> = when (config.provider.api) {
-        TranslationApi.CHAT_COMPLETIONS -> withRetry { chatCompletions(lines, config) }
-        TranslationApi.ANTHROPIC -> withRetry { anthropic(lines, config) }
         TranslationApi.DEEPL -> withRetry { deepL(lines, config) }
+        else -> complete(TranslationPrompt.forTranslation(lines, config), config)
+    }
+
+    /** Runs any line prompt (translation or romaji) on an LLM provider. */
+    suspend fun complete(prompt: LinePrompt, config: TranslationConfig): List<String> = when (config.provider.api) {
+        TranslationApi.CHAT_COMPLETIONS -> withRetry { chatCompletions(prompt, config) }
+        TranslationApi.ANTHROPIC -> withRetry { anthropic(prompt, config) }
+        TranslationApi.DEEPL -> throw TranslationException("DeepL only translates")
         TranslationApi.T3_CODE -> error("T3 Code is not an HTTP translator")
     }
 
@@ -163,7 +183,7 @@ internal object HttpTranslators {
         throw TranslationException(last?.message ?: "Translation failed")
     }
 
-    private suspend fun chatCompletions(lines: List<String>, config: TranslationConfig): List<String> {
+    private suspend fun chatCompletions(prompt: LinePrompt, config: TranslationConfig): List<String> {
         val url = config.baseUrl.ifBlank { config.provider.defaultBaseUrl }
         if (url.isBlank()) throw TranslationException("Set a base URL for the custom provider")
         if (config.apiKey.isBlank() && config.provider != TranslationProvider.CUSTOM) {
@@ -173,16 +193,16 @@ internal object HttpTranslators {
             putJsonArray("messages") {
                 addJsonObject {
                     put("role", "system")
-                    put("content", TranslationPrompt.systemPrompt(lines.size, config.systemPrompt))
+                    put("content", prompt.system)
                 }
                 addJsonObject {
                     put("role", "user")
-                    put("content", TranslationPrompt.userPrompt(lines, config.languageCode, config.mode))
+                    put("content", prompt.user)
                 }
             }
             if (config.model.isNotBlank()) put("model", config.model)
             put("temperature", 0.3)
-            put("max_tokens", lines.size * 100)
+            put("max_tokens", prompt.lineCount * 100)
             putJsonObject("response_format") {
                 put("type", "json_schema")
                 putJsonObject("json_schema") {
@@ -216,20 +236,20 @@ internal object HttpTranslators {
         val content = translationJson.parseToJsonElement(text).jsonObject["choices"]?.jsonArray?.firstOrNull()
             ?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
             ?: throw TranslationException("The reply had no message content")
-        return TranslationPrompt.parseLines(content, lines.size).getOrElse { throw TranslationException(it.message ?: "Bad reply") }
+        return TranslationPrompt.parseLines(content, prompt.lineCount).getOrElse { throw TranslationException(it.message ?: "Bad reply") }
     }
 
-    private suspend fun anthropic(lines: List<String>, config: TranslationConfig): List<String> {
+    private suspend fun anthropic(prompt: LinePrompt, config: TranslationConfig): List<String> {
         if (config.apiKey.isBlank()) throw TranslationException("Claude needs an API key")
         val body = buildJsonObject {
             put("model", config.model.ifBlank { config.provider.models.first() })
-            put("max_tokens", (lines.size * 100).coerceAtLeast(1024))
+            put("max_tokens", (prompt.lineCount * 100).coerceAtLeast(1024))
             put("temperature", 0.3)
-            put("system", TranslationPrompt.systemPrompt(lines.size, config.systemPrompt))
+            put("system", prompt.system)
             putJsonArray("messages") {
                 addJsonObject {
                     put("role", "user")
-                    put("content", TranslationPrompt.userPrompt(lines, config.languageCode, config.mode))
+                    put("content", prompt.user)
                 }
             }
         }
@@ -250,7 +270,7 @@ internal object HttpTranslators {
             ?.joinToString("")
             ?.takeIf(String::isNotBlank)
             ?: throw TranslationException("The reply had no text")
-        return TranslationPrompt.parseLines(content, lines.size).getOrElse { throw TranslationException(it.message ?: "Bad reply") }
+        return TranslationPrompt.parseLines(content, prompt.lineCount).getOrElse { throw TranslationException(it.message ?: "Bad reply") }
     }
 
     /** Metrolist's DeepLService: free keys end in ":fx" and use the free host. */

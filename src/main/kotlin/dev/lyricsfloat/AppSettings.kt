@@ -92,9 +92,21 @@ class AppSettings(onRomanizeJapaneseChange: (Boolean) -> Unit) {
         AppState.saveText("translate.model.${provider.name}", value)
     }
 
+    /** Use the translation provider for romaji, with the offline romaji as the fallback. */
+    var aiRomaji by persisted(AppState.loadText("translate.aiRomaji") != "false", save = { AppState.saveText("translate.aiRomaji", it.toString()) })
+
     /** What the translator should run with; null while translation is off. */
-    fun translationConfig(): TranslationConfig? {
-        if (!translateEnabled) return null
+    fun translationConfig(): TranslationConfig? = if (translateEnabled) providerConfig() else null
+
+    /**
+     * What AI romaji runs with. It follows the provider settings even while
+     * translation is off, and is null when romaji or AI romaji is off or the
+     * provider cannot answer (DeepL, or no key or model yet).
+     */
+    fun romajiConfig(): TranslationConfig? =
+        if (romanizeJapanese && aiRomaji) providerConfig().takeIf(TranslationConfig::canComplete) else null
+
+    private fun providerConfig(): TranslationConfig {
         val provider = translationProvider
         return TranslationConfig(
             provider = provider,

@@ -412,3 +412,15 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Settings → Translate tab; translate toggle in the hover bar shows the
       status. Translation runs automatically per song while enabled.
 
+## 30. AI romaji
+
+- [x] The translation provider also writes romaji for Japanese songs
+      (`RomajiPrompt`, lowercase Hepburn read in context), in its own request
+      so it runs even while translation is off and survives target-language
+      changes. DeepL cannot romanize, so it stays offline-only.
+- [x] Results land in `aiRomanizedTextFlow`; the viewport prefers them over
+      the offline kuromoji romaji, which shows first and stays when the
+      request fails or `AI romaji` is off (Translate tab, default on).
+- [x] Cached like translations under `$XDG_DATA_HOME/lyricsfloat/romaji`,
+      keyed by the model and lyrics only. Kanji-only lines get AI romaji
+      when the song contains kana anywhere.
