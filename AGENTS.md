@@ -9,7 +9,7 @@ file under `$XDG_CONFIG_HOME/lyricsfloat/state.properties`.
 ## Reference projects
 
 - **Metrolist** — `~/projects/_sandbox/_github/Metrolist`
-  (GitHub: <https://github.com/MetrolistProject/Metrolist>, GPL-3.0). The
+  (GitHub: <https://github.com/MetrolistGroup/Metrolist>, GPL-3.0). The
   lyrics feature set (providers, extended-LRC parsing, word karaoke, agent
   positioning, interval indicator, romaji) is ported from there. Read it
   before changing anything under `src/main/kotlin/dev/lyricsfloat/lyrics/` or

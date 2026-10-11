@@ -9,11 +9,16 @@ the current line in a small always-on-top pill you can park anywhere on screen.
 Built with Kotlin and Compose Multiplatform for desktop. The lyrics feature
 set (providers, extended-LRC parsing, word karaoke, agent positioning,
 interval indicator, romaji) is ported from
-[Metrolist](https://github.com/MetrolistProject/Metrolist) — a local reference
+[Metrolist](https://github.com/MetrolistGroup/Metrolist) — a local reference
 clone lives at `~/projects/_sandbox/_github/Metrolist`. The native window-drag
 technique is adapted from pray-time (`~/projects/_sandbox/pray-time`).
 
 ![Linux](https://img.shields.io/badge/platform-Linux/Wayland-blue)
+
+<p>
+  <img src="docs/images/overlay.png" alt="Lyrics Float overlay showing Japanese lyrics with romaji and translation" width="508">
+  <img src="docs/images/settings.png" alt="Lyrics Float overlay settings" width="380">
+</p>
 
 ## Features
 
@@ -26,16 +31,28 @@ technique is adapted from pray-time (`~/projects/_sandbox/pray-time`).
   understood everywhere.
 - Metrolist-style lyrics rendering: karaoke word-by-word fill, sliding line
   transitions, interval indicator dots during instrumental gaps, agent
-  positioning (v1 left / v2 right), and offline romaji for Japanese lyrics.
-  The playback position is interpolated locally, so the highlight stays
-  smooth without hammering D-Bus.
+  positioning (v1 left / v2 right). The playback position is interpolated
+  locally, so the highlight stays smooth without hammering D-Bus.
+- Romaji for Japanese lyrics. Offline romaji from kuromoji shows first, with
+  phrase-level fixes for readings it gets wrong (一人 → `hitori`). When a
+  translation provider is set up, an AI model rewrites the romaji line by
+  line in context and replaces the offline version. The offline romaji stays
+  if the request fails or `AI romaji` is off.
+- AI lyrics translation, shown under the romaji in its own text size. One
+  request translates the whole song. Providers are OpenRouter, OpenAI,
+  Claude, Gemini, Perplexity, xAI, Mistral, Inception, any custom
+  OpenAI-compatible endpoint, DeepL, and T3 Code. Literal or transcribed
+  prompt styles and a custom prompt are available in Settings → Translate,
+  and the hover bar has a translate toggle. Results are cached under
+  `$XDG_DATA_HOME/lyricsfloat/`. DeepL cannot produce romaji, so it only
+  translates.
 - Manual lyrics search (1 s debounce) with per-track picks that persist.
   Sync offset fine-tuning (±50 ms steps, −3..+3 s slider).
 - Floating overlay: transparent, always-on-top, native WM drag and
   edge/corner resize, hover controls, progress bar, adjustable text size and
   opacity. Context lines scale with the window size.
 - Settings: theme (system/light/dark), sync offset, screen anchor,
-  preferred player, auto-hide.
+  preferred player, auto-hide, translation provider and target language.
 - System tray via StatusNotifierItem with show/hide, search, settings and quit.
 
 ## Requirements

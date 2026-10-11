@@ -4,7 +4,7 @@ Goal: bring the whole lyrics feature set of Metrolist to the floating overlay,
 plus fix window drag/resize. Reference sources:
 
 - Metrolist: `~/projects/_sandbox/_github/Metrolist` (GPL-3.0, GitHub
-  [MetrolistProject/Metrolist](https://github.com/MetrolistProject/Metrolist))
+  [MetrolistGroup/Metrolist](https://github.com/MetrolistGroup/Metrolist))
 - pray-time drag implementation: `~/projects/_sandbox/pray-time`
   (`platform/LinuxWindowMover.kt`, EWMH `_NET_WM_MOVERESIZE` via JNA)
 

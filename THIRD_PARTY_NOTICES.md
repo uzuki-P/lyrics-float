@@ -10,7 +10,7 @@ extended-LRC parsing and timing behavior, romaji support, lyrics provider
 behavior, and lyrics rendering. These parts were modified for Lyrics Float in
 2026.
 
-- Source: <https://github.com/MetrolistProject/Metrolist>
+- Source: <https://github.com/MetrolistGroup/Metrolist>
 - Copyright: Metrolist Project (C) 2026
 - License: GNU GPL-3.0-only. The full license text is in [LICENSE](LICENSE).
 
