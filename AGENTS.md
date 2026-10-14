@@ -6,6 +6,10 @@ every MPRIS player on the D-Bus session bus, interpolates playback position
 locally, and renders karaoke-style lyrics. Settings persist as a key=value
 file under `$XDG_CONFIG_HOME/lyricsfloat/state.properties`.
 
+A Windows port runs the same app on Windows 10/11: System Media Transport
+Controls replace MPRIS, and settings live in `%APPDATA%\LyricsFloat`.
+Keep Linux behavior unchanged when touching platform code.
+
 ## Reference projects
 
 - **Metrolist** — `~/projects/_sandbox/_github/Metrolist`
@@ -25,9 +29,12 @@ file under `$XDG_CONFIG_HOME/lyricsfloat/state.properties`.
 - `src/main/kotlin/dev/lyricsfloat/`
   - `Main.kt` — windows (overlay + search + settings dialogs), wiring.
   - `lyrics/` — providers, extended-LRC parser, repository/overrides.
-  - `mpris/` — D-Bus now-playing monitor with interpolated clock.
-  - `platform/` — tray (StatusNotifierItem), state persistence,
-    `LinuxWindowMover`, screen anchor math.
+  - `mpris/` — `NowPlayingSource` with the D-Bus MPRIS monitor (Linux) and
+    the SMTC monitor (Windows, driven by `resources/windows/smtc-monitor.ps1`),
+    sharing the interpolated clock in `PlayerRuntime`.
+  - `platform/` — `DesktopPlatform` picks the per-OS tray, window mover,
+    click-through and autostart (`Linux*` and `Windows*` files);
+    `AppPaths` holds config/data roots; state persistence, screen anchor math.
   - `ui/` — Compose views (overlay pill, search, settings, theme).
 - `docs/plan.md` — current work plan; keep checkbox states in sync with the
   code when you finish or start a step.
@@ -36,7 +43,8 @@ file under `$XDG_CONFIG_HOME/lyricsfloat/state.properties`.
   `just install` copies the newest AppImage to `~/apps/lyrics-float.AppImage`
   (stable name) and registers the KDE/vicinae launcher entry
   (`scripts/install-appimage`, `--uninstall` to remove). `just update` builds,
-  stages a dated `_apk/` copy, and installs in one command.
+  stages a dated `_apk/` copy, and installs in one command. On Windows,
+  `just build-exe` builds the installer and stages it in `_apk/`.
 
 ## Conventions
 

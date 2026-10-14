@@ -424,3 +424,49 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
 - [x] Cached like translations under `$XDG_DATA_HOME/lyricsfloat/romaji`,
       keyed by the model and lyrics only. Kanji-only lines get AI romaji
       when the song contains kana anywhere.
+
+## 31. Windows port
+
+Linux behavior stays as it is: the same MPRIS, SNI, Xlib and XDG code runs
+behind the new interfaces. Windows-only classes load only when
+`DesktopPlatform.current` resolves to Windows.
+
+- [x] `platform/DesktopPlatform.kt` picks the now-playing source, tray,
+      window mover, click-through and autostart by OS at startup.
+      `platform/AppPaths.kt` resolves config and data roots.
+- [x] Paths: Linux keeps `$XDG_CONFIG_HOME/lyricsfloat` and
+      `$XDG_DATA_HOME/lyricsfloat`. Windows uses `%APPDATA%\LyricsFloat`
+      (settings) and `%LOCALAPPDATA%\LyricsFloat` (lyrics, translation and
+      romaji caches, crash log, SMTC helper log).
+- [x] Song detection: `mpris/SmtcNowPlayingMonitor.kt` runs the bundled
+      `windows/smtc-monitor.ps1` under Windows PowerShell 5.1. The script
+      reads every `GlobalSystemMediaTransportControlsSession` and prints a
+      JSON line every 250 ms. Positions advance from `LastUpdatedTime` while
+      playing. The Kotlin side reuses the MPRIS clock (`PlayerRuntime`) and
+      selection order, falls back to Windows' current session, and restarts
+      the helper with backoff. Unit tests cover parsing, names and selection.
+- [x] Tray: AWT `SystemTray` with the same menu (show/hide, search,
+      timing, settings, pass-through, quit). Left click toggles the lyrics.
+- [x] Window drag/resize: no native hand-off; the manual fallback follows
+      the screen pointer (`MouseInfo`) on Windows.
+- [x] Click pass-through: `WS_EX_TRANSPARENT` (plus `WS_EX_LAYERED` when
+      the window is not layered yet) through JNA `User32`.
+- [x] Start on login: `HKCU\...\CurrentVersion\Run` value pointing at the
+      jpackage launcher (`jpackage.app-path`).
+- [x] T3 Code translation: `t3` lookup accepts `.exe`/`.cmd`/`.bat` and
+      splits PATH with `;`.
+- [x] Packaging: `Msi` and `Exe` target formats, `packaging/windows/lyrics-float.ico`,
+      per-user install, fixed upgrade UUID; `stageExe` stages a dated copy
+      in `_apk/`. Recipes `just build-windows` and `just build-exe` run under
+      Windows PowerShell.
+- [x] Linux check: `just test` and `just build` pass; the app starts through
+      the bundled classpath and registers its SNI tray.
+- [ ] Windows check: `just build-exe` produces an installer that installs
+      and starts.
+- [ ] Windows check: SMTC helper detects Spotify, a browser tab and Media
+      Player; titles with Japanese text arrive intact; lyrics stay in sync
+      after seek and pause.
+- [ ] Windows check: no console window flashes when the helper starts.
+- [ ] Windows check: tray menu, drag and resize, and click pass-through on
+      the transparent overlay (including turning it back off).
+- [ ] Windows check: Start on login survives a reboot.
