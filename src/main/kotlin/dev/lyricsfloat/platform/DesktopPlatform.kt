@@ -77,6 +77,12 @@ class TrayActions(
     val clickPassThroughEnabled: () -> Boolean,
     val overlayVisible: () -> Boolean,
     val onQuit: () -> Unit,
+    /**
+     * Opens the app-drawn tray menu at a screen point. Trays whose native
+     * menu cannot match the app (Windows) call this on right-click; Linux
+     * keeps Plasma's DBusMenu and never calls it.
+     */
+    val onOpenMenu: (java.awt.Point) -> Unit = {},
 )
 
 interface AppTray {

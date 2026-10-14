@@ -1,9 +1,7 @@
 package dev.lyricsfloat.platform
 
-import java.awt.CheckboxMenuItem
 import java.awt.EventQueue
-import java.awt.MenuItem
-import java.awt.PopupMenu
+import java.awt.MouseInfo
 import java.awt.SystemTray
 import java.awt.TrayIcon
 import java.awt.event.MouseAdapter
@@ -12,9 +10,9 @@ import javax.imageio.ImageIO
 
 /**
  * Notification-area icon through AWT's SystemTray, the Windows counterpart of
- * [LinuxSniTray]: left click toggles the lyrics, right click opens the same
- * menu. AWT menus have no "about to show" hook, so labels refresh on every
- * mouse press over the icon, which Windows delivers before the menu opens.
+ * [LinuxSniTray]: left click toggles the lyrics, right click opens the
+ * app-drawn menu (`ui/TrayMenu.kt`) through [TrayActions.onOpenMenu]. AWT's
+ * own PopupMenu is a plain Win32 menu that cannot use the app's look.
  */
 internal class WindowsTray(private val actions: TrayActions) : AppTray {
     private var icon: TrayIcon? = null
@@ -34,44 +32,26 @@ internal class WindowsTray(private val actions: TrayActions) : AppTray {
 
     private fun install() {
         if (icon != null || !SystemTray.isSupported()) return
-        val toggle = MenuItem().apply { addActionListener { actions.onToggleOverlay() } }
-        val passThrough = CheckboxMenuItem("Click pass-through").apply {
-            addItemListener { actions.onToggleClickPassThrough() }
-        }
-        fun refresh() {
-            toggle.label = if (actions.overlayVisible()) "Hide lyrics" else "Show lyrics"
-            passThrough.state = actions.clickPassThroughEnabled()
-        }
-        refresh()
-
-        val menu = PopupMenu().apply {
-            add(MenuItem("Lyrics Float").apply { isEnabled = false })
-            addSeparator()
-            add(toggle)
-            add(MenuItem("Search lyrics").apply { addActionListener { actions.onSearch() } })
-            add(MenuItem("Lyrics timing").apply { addActionListener { actions.onTiming() } })
-            add(MenuItem("Settings").apply { addActionListener { actions.onSettings() } })
-            addSeparator()
-            add(passThrough)
-            addSeparator()
-            add(MenuItem("Quit").apply { addActionListener { actions.onQuit() } })
-        }
-
         val image = requireNotNull(
             WindowsTray::class.java.classLoader
                 .getResourceAsStream("composeResources/dev.lyricsfloat.resources/drawable/lyrics_float_tray.png"),
         ) { "missing tray icon" }.use(ImageIO::read)
 
-        val trayIcon = TrayIcon(image, "Lyrics Float", menu).apply {
+        val trayIcon = TrayIcon(image, "Lyrics Float").apply {
             isImageAutoSize = true
             addMouseListener(object : MouseAdapter() {
-                override fun mousePressed(e: MouseEvent) = refresh()
+                // Windows reports the popup trigger on release.
+                override fun mouseReleased(e: MouseEvent) {
+                    if (e.isPopupTrigger || e.button == MouseEvent.BUTTON3) {
+                        // TrayIcon event coordinates are device pixels on
+                        // scaled displays; MouseInfo matches window coordinates.
+                        val point = MouseInfo.getPointerInfo()?.location ?: e.locationOnScreen
+                        actions.onOpenMenu(point)
+                    }
+                }
 
                 override fun mouseClicked(e: MouseEvent) {
-                    if (e.button == MouseEvent.BUTTON1 && e.clickCount == 1) {
-                        actions.onToggleOverlay()
-                        refresh()
-                    }
+                    if (e.button == MouseEvent.BUTTON1 && e.clickCount == 1) actions.onToggleOverlay()
                 }
             })
         }

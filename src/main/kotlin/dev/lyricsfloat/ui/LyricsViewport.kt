@@ -135,6 +135,7 @@ internal fun LyricsViewport(
     val density = LocalDensity.current
     val palette = LocalAppPalette.current
     val entries = lyrics.entries
+    val japaneseSong = remember(entries) { entries.any { containsKana(it.text) } }
 
     // Reset manual scroll when the song changes.
     var autoScrolling by remember { mutableStateOf(autoScrollDefault) }
@@ -336,6 +337,7 @@ internal fun LyricsViewport(
                                 )
                             } else LyricLine(
                                 entry = item.entry,
+                                japanese = japaneseSong,
                                 isActive = isActiveItem(itemIndex),
                                 distance = distance,
                                 depthBlur = autoScrolling,
@@ -401,6 +403,7 @@ internal fun LyricsViewport(
 @Composable
 private fun LyricLine(
     entry: LyricsEntry,
+    japanese: Boolean,
     isActive: Boolean,
     distance: Int,
     depthBlur: Boolean,
@@ -503,7 +506,7 @@ private fun LyricLine(
                 fontSize = fontSizeSp.sp,
                 fontWeight = FontWeight.Bold,
                 lineHeight = (fontSizeSp * 1.3).sp,
-            ),
+            ).withCjkLocale(japanese),
             align = align,
             outline = textOutline,
             outlinePx = outlinePx,

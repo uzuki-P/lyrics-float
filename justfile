@@ -23,13 +23,13 @@ build:
 build-appimage:
     ./gradlew stageAppImage
 
-# Windows only: build the MSI and EXE installers into build/compose/binaries/main/.
-build-windows:
-    ./gradlew packageMsi packageExe
-
-# Windows only: build the EXE installer and stage a timestamped copy in _apk/.
+# Windows only: build the portable app; run build/compose/binaries/main/app/lyrics-float/lyrics-float.exe.
 build-exe:
-    ./gradlew stageExe
+    ./gradlew createDistributable
+
+# Windows only: build the portable app and stage a timestamped zip in _apk/.
+build-portable:
+    ./gradlew stagePortable
 
 # Build the AppImage and install it to ~/apps with a desktop entry, so
 # KDE/vicinae launchers can start it by name regardless of build file names.

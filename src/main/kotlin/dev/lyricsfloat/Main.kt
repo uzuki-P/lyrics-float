@@ -54,6 +54,7 @@ import dev.lyricsfloat.ui.OverlayView
 import dev.lyricsfloat.ui.SearchView
 import dev.lyricsfloat.ui.SettingsView
 import dev.lyricsfloat.ui.TimingView
+import dev.lyricsfloat.ui.TrayMenuWindow
 import dev.lyricsfloat.ui.WindowResizeZones
 import dev.lyricsfloat.ui.rememberSystemThemeIsDark
 import dev.lyricsfloat.ui.themeIsDark
@@ -146,6 +147,8 @@ fun main() = application {
     val toggleClickPassThrough = {
         settings.clickPassThrough = !settings.clickPassThrough
     }
+    // App-drawn tray menu position (Windows only; see TrayActions.onOpenMenu).
+    var trayMenuAt by remember { mutableStateOf<Point?>(null) }
     DisposableEffect(Unit) {
         val tray = platform.createTray(
             TrayActions(
@@ -157,6 +160,7 @@ fun main() = application {
                 clickPassThroughEnabled = { settings.clickPassThrough },
                 overlayVisible = { overlayVisible },
                 onQuit = quit,
+                onOpenMenu = { trayMenuAt = it },
             ),
         )
         tray.start()
@@ -283,6 +287,22 @@ fun main() = application {
             )
         }
     }
+
+    // ----- tray menu (Windows) -----
+
+    TrayMenuWindow(
+        anchor = trayMenuAt,
+        palette = palette,
+        overlayVisible = overlayVisible,
+        clickPassThrough = settings.clickPassThrough,
+        onDismiss = { trayMenuAt = null },
+        onToggleOverlay = { overlayVisible = !overlayVisible },
+        onSearch = { searchVisible = true },
+        onTiming = { timingVisible = true },
+        onSettings = { settingsVisible = true },
+        onToggleClickPassThrough = toggleClickPassThrough,
+        onQuit = quit,
+    )
 
     // ----- search window -----
 

@@ -291,7 +291,8 @@ private fun HoverBar(
         Column(Modifier.weight(1f)) {
             Text(
                 text = track?.title?.takeIf(String::isNotBlank) ?: "Lyrics Float",
-                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    .withCjkLocale(containsKana(track?.title.orEmpty() + track?.artist.orEmpty())),
                 color = palette.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -299,7 +300,8 @@ private fun HoverBar(
             track?.artist?.takeIf(String::isNotBlank)?.let { artist ->
                 Text(
                     text = artist,
-                    style = TextStyle(fontSize = 10.sp),
+                    style = TextStyle(fontSize = 10.sp)
+                        .withCjkLocale(containsKana(track.title + artist)),
                     color = palette.onSurfaceDim,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

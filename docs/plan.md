@@ -446,8 +446,10 @@ behind the new interfaces. Windows-only classes load only when
       selection order, prefers Windows' current session when several play
       or none does, and restarts the helper with backoff (killed promptly on
       cancel; errors logged once to `smtc-helper.log`). Unit tests cover parsing, names and selection.
-- [x] Tray: AWT `SystemTray` with the same menu (show/hide, search,
-      timing, settings, pass-through, quit). Left click toggles the lyrics.
+- [x] Tray: AWT `SystemTray` icon; left click toggles the lyrics. Right
+      click opens an app-drawn Compose menu (`ui/TrayMenu.kt`, app palette and
+      icons) instead of the native Win32 menu; it closes on focus loss,
+      Escape, or after an action.
 - [x] Window drag/resize: no native hand-off; the manual fallback follows
       the screen pointer (`MouseInfo`) on Windows.
 - [x] Click pass-through: `WS_EX_TRANSPARENT` (plus `WS_EX_LAYERED` when
@@ -456,14 +458,23 @@ behind the new interfaces. Windows-only classes load only when
       jpackage launcher (`jpackage.app-path`).
 - [x] T3 Code translation: `t3` lookup accepts `.exe`/`.cmd`/`.bat` and
       splits PATH with `;`.
-- [x] Packaging: `Msi` and `Exe` target formats, `packaging/windows/lyrics-float.ico`,
-      per-user install, fixed upgrade UUID; `stageExe` stages a dated copy
-      in `_apk/`. Recipes `just build-windows` and `just build-exe` run under
-      Windows PowerShell.
+- [x] Japanese text: lyric lines and the hover-bar title carry a `ja-JP`
+      locale on Windows when the song has kana, so font fallback picks a
+      Japanese font instead of a Chinese or bitmap one (`ui/TextLocale.kt`).
+- [x] Packaging: portable, no installer. `just build-exe` runs
+      `createDistributable` (run `lyrics-float.exe` from
+      `build\compose\binaries\main\app\lyrics-float`); `just build-portable`
+      zips that folder and stages it in `_apk/`. Icon from
+      `packaging/windows/lyrics-float.ico`. Recipes run under Windows
+      PowerShell; `default` calls the just binary directly because npm's
+      `just.ps1` shim is blocked by the default execution policy.
 - [x] Linux check: `just test` and `just build` pass; the app starts through
       the bundled classpath and registers its SNI tray.
-- [ ] Windows check: `just build-exe` produces an installer that installs
-      and starts.
+- [x] Windows check: the app starts on Windows (rojali) and shows the tray.
+- [ ] Windows check: `just build-portable` zip runs from a fresh folder.
+- [ ] Windows check: the app-drawn tray menu opens at the pointer, takes
+      focus, and closes when clicking elsewhere.
+- [ ] Windows check: Japanese lyrics render in Yu Gothic UI or Meiryo.
 - [ ] Windows check: SMTC helper detects Spotify, a browser tab and Media
       Player; titles with Japanese text arrive intact; lyrics stay in sync
       after seek and pause.
