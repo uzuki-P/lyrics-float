@@ -44,8 +44,7 @@ Keep Linux behavior unchanged when touching platform code.
   (stable name) and registers the KDE/vicinae launcher entry
   (`scripts/install-appimage`, `--uninstall` to remove). `just update` builds,
   stages a dated `_apk/` copy, and installs in one command. On Windows,
-  `just build-exe` builds the portable app (`lyrics-float.exe` plus its
-  runtime folder) and stages it zipped in `_apk/`.
+  `just build-exe` builds the installer and stages it in `_apk/`.
 
 ## Conventions
 

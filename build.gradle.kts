@@ -59,8 +59,9 @@ compose.desktop {
 
         nativeDistributions {
             modules("jdk.security.auth")
-            // Windows ships as a portable folder instead (packagePortableZip).
-            targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
+            // Each format builds only on its own OS: Linux packages on Linux,
+            // the Exe installer on Windows (jpackage cannot cross-build).
+            targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Exe)
             packageName = "lyrics-float"
             packageVersion = "0.1.0"
             description = "Floating synced lyrics for your desktop music player"
@@ -71,10 +72,15 @@ compose.desktop {
             }
 
             windows {
-                // Icon of lyrics-float.exe in the portable folder.
                 iconFile.set(project.file("packaging/windows/lyrics-float.ico"))
-                // Unused by the portable build; kept so an installer built
-                // later upgrades in place.
+                menuGroup = "Lyrics Float"
+                // Per-user install: no admin prompt, and the HKCU Run key used
+                // for "Start on login" points at a path the user owns.
+                perUserInstall = true
+                dirChooser = true
+                shortcut = true
+                menu = true
+                // Keep fixed so new installers upgrade old installs in place.
                 upgradeUuid = "73262e85-d80f-43e5-aa86-66b471eb2148"
             }
         }
@@ -160,20 +166,10 @@ tasks.register("stageAppImage") {
     doLast { stageArtifact(source.get().asFile, stagedDir.asFile) }
 }
 
-// Windows: no installer. createDistributable builds a folder with
-// lyrics-float.exe and its bundled runtime; the exe runs straight from it and
-// needs the folder next to it, so the folder ships zipped. jpackage builds
-// for the host OS only, so run this on Windows.
-val portableZip = tasks.register<Zip>("packagePortableZip") {
-    dependsOn("createDistributable")
-    from(layout.buildDirectory.dir("compose/binaries/main/app"))
-    archiveFileName.set("lyrics-float-${project.version}.zip")
-    destinationDirectory.set(layout.buildDirectory.dir("compose/binaries/main/portable"))
-}
-
-tasks.register("stagePortable") {
-    dependsOn(portableZip)
-    val source = portableZip.flatMap { it.archiveFile }
+// Windows only: Compose's packageExe runs jpackage + WiX on the host OS.
+tasks.register("stageExe") {
+    dependsOn("packageExe")
+    val source = layout.buildDirectory.file("compose/binaries/main/exe/lyrics-float-${project.version}.exe")
     val stagedDir = layout.projectDirectory.dir("_apk")
     doLast { stageArtifact(source.get().asFile, stagedDir.asFile) }
 }

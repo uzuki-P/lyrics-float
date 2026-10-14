@@ -461,16 +461,17 @@ behind the new interfaces. Windows-only classes load only when
 - [x] Japanese text: lyric lines and the hover-bar title carry a `ja-JP`
       locale on Windows when the song has kana, so font fallback picks a
       Japanese font instead of a Chinese or bitmap one (`ui/TextLocale.kt`).
-- [x] Packaging: portable, no installer. `just build-exe` builds the app
-      folder (`lyrics-float.exe` plus its runtime), zips it, and stages
-      `lyrics-float-<version>_<dd-mmm_hh-mm>.zip` in `_apk/`. Icon from
+- [x] Packaging: per-user EXE installer (start menu entry and desktop
+      shortcut, fixed upgrade UUID). `just build-exe` builds it and stages
+      `lyrics-float-<version>_<dd-mmm_hh-mm>.exe` in `_apk/`. A portable
+      folder was tried and dropped: jpackage's exe needs its runtime folder. Icon from
       `packaging/windows/lyrics-float.ico`. Recipes run under Windows
       PowerShell; `default` calls the just binary directly because npm's
       `just.ps1` shim is blocked by the default execution policy.
 - [x] Linux check: `just test` and `just build` pass; the app starts through
       the bundled classpath and registers its SNI tray.
 - [x] Windows check: the app starts on Windows (rojali) and shows the tray.
-- [ ] Windows check: the `just build-exe` zip runs from a fresh folder.
+- [ ] Windows check: the `just build-exe` installer installs and starts.
 - [ ] Windows check: the app-drawn tray menu opens at the pointer, takes
       focus, and closes when clicking elsewhere.
 - [ ] Windows check: Japanese lyrics render in Yu Gothic UI or Meiryo.

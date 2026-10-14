@@ -23,10 +23,9 @@ build:
 build-appimage:
     ./gradlew stageAppImage
 
-# Windows only: build the portable app (lyrics-float.exe plus its runtime
-# folder) and stage a timestamped zip in _apk/.
+# Windows only: build the EXE installer and stage a timestamped copy in _apk/.
 build-exe:
-    ./gradlew stagePortable
+    ./gradlew stageExe
 
 # Build the AppImage and install it to ~/apps with a desktop entry, so
 # KDE/vicinae launchers can start it by name regardless of build file names.
