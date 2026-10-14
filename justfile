@@ -4,7 +4,7 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
 # List available recipes.
 default:
-    @just --list
+    @{{just_executable()}} --list
 
 # Run the desktop app in development mode.
 dev:
