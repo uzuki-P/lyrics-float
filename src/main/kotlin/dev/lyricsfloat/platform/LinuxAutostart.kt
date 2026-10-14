@@ -5,16 +5,18 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 /** Registers the installed launcher or AppImage for XDG session autostart. */
-object Autostart {
+object LinuxAutostart : AutostartEntry {
     private val entry: File by lazy {
         val configHome = System.getenv("XDG_CONFIG_HOME")?.takeIf(String::isNotBlank)
             ?: System.getProperty("user.home") + "/.config"
         File(configHome, "autostart/lyrics-float.desktop")
     }
 
-    fun isEnabled(): Boolean = entry.isFile
+    override val failureMessage = "Could not set autostart. Run the installed app or AppImage."
 
-    fun setEnabled(enabled: Boolean): Boolean = runCatching {
+    override fun isEnabled(): Boolean = entry.isFile
+
+    override fun setEnabled(enabled: Boolean): Boolean = runCatching {
         if (enabled) {
             val executable = executablePath() ?: return false
             writeEntry(executable)
@@ -24,7 +26,7 @@ object Autostart {
         }
     }.getOrDefault(false)
 
-    fun refresh() {
+    override fun refresh() {
         if (isEnabled()) executablePath()?.let { runCatching { writeEntry(it) } }
     }
 

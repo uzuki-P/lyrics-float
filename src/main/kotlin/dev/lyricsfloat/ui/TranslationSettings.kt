@@ -32,6 +32,7 @@ import dev.lyricsfloat.lyrics.translation.TranslationMode
 import dev.lyricsfloat.lyrics.translation.TranslationPrompt
 import dev.lyricsfloat.lyrics.translation.TranslationProvider
 import dev.lyricsfloat.lyrics.translation.TranslationStatus
+import dev.lyricsfloat.platform.AppPaths
 import kotlin.math.roundToInt
 
 private val DropdownWidth = 180.dp
@@ -134,7 +135,7 @@ internal fun TranslateTab(
                 "Each song runs once in a temporary T3 Code thread in its \"No project\" folder. " +
                     "The thread is deleted as soon as the reply arrives."
             TranslationApi.DEEPL -> "Free API keys end in :fx and use DeepL's free endpoint."
-            else -> "Keys are stored unencrypted in ~/.config/lyricsfloat/state.properties."
+            else -> "Keys are stored unencrypted in ${AppPaths.stateFileDisplay}."
         },
     ) {
         SettingRow("Provider") {

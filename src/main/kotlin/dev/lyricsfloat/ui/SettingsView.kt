@@ -39,7 +39,7 @@ import dev.lyricsfloat.lyrics.BuildVersion
 import dev.lyricsfloat.lyrics.LyricsProviders
 import dev.lyricsfloat.lyrics.translation.TranslationStatus
 import dev.lyricsfloat.mpris.PlayerInfo
-import dev.lyricsfloat.platform.Autostart
+import dev.lyricsfloat.platform.DesktopPlatform
 import dev.lyricsfloat.platform.WindowAnchor
 import kotlin.math.roundToInt
 
@@ -231,7 +231,8 @@ private fun OverlayTab(
     onResetOverlayPosition: () -> Unit,
 ) {
     val palette = LocalAppPalette.current
-    var autostartEnabled by remember { mutableStateOf(Autostart.isEnabled()) }
+    val autostart = DesktopPlatform.current.autostart
+    var autostartEnabled by remember { mutableStateOf(autostart.isEnabled()) }
     var autostartError by remember { mutableStateOf(false) }
 
     SettingsGroup("Look") {
@@ -277,13 +278,13 @@ private fun OverlayTab(
             "Start on login",
             autostartEnabled,
             { enabled ->
-                autostartError = !Autostart.setEnabled(enabled)
-                autostartEnabled = Autostart.isEnabled()
+                autostartError = !autostart.setEnabled(enabled)
+                autostartEnabled = autostart.isEnabled()
             },
         )
         if (autostartError) {
             InlineMessage(
-                "Could not set autostart. Run the installed app or AppImage.",
+                autostart.failureMessage,
                 MessageTone.ERROR,
                 Modifier.padding(bottom = 6.dp),
             )
@@ -338,7 +339,7 @@ private fun SourcesTab(
         }
         if (players.isEmpty()) {
             Text(
-                "No media players detected on the session bus.",
+                DesktopPlatform.current.noPlayersMessage,
                 style = AppType.caption,
                 color = palette.onSurfaceDim,
                 modifier = Modifier.padding(vertical = 6.dp),

@@ -40,12 +40,11 @@ import dev.lyricsfloat.lyrics.translation.LyricsTranslator
 import dev.lyricsfloat.lyrics.SongOffsets
 import dev.lyricsfloat.lyrics.currentIndexAt
 import dev.lyricsfloat.lyrics.songKey
-import dev.lyricsfloat.mpris.NowPlayingMonitor
+import dev.lyricsfloat.platform.AppPaths
 import dev.lyricsfloat.platform.AppState
-import dev.lyricsfloat.platform.Autostart
-import dev.lyricsfloat.platform.LinuxClickThrough
-import dev.lyricsfloat.platform.LinuxSniTray
-import dev.lyricsfloat.platform.LinuxWindowMover
+import dev.lyricsfloat.platform.DesktopPlatform
+import dev.lyricsfloat.platform.TrayActions
+import dev.lyricsfloat.platform.isWindows
 import dev.lyricsfloat.platform.anchorPosition
 import dev.lyricsfloat.ui.AppPalette
 import dev.lyricsfloat.ui.DarkPalette
@@ -79,7 +78,8 @@ fun main() = application {
     var settingsVisible by remember { mutableStateOf(false) }
     var timingVisible by remember { mutableStateOf(false) }
 
-    val monitor = remember { NowPlayingMonitor() }
+    val platform = DesktopPlatform.current
+    val monitor = remember { platform.createNowPlayingSource() }
     val repository = remember { LyricsRepository(scope) }
     val settings = remember { AppSettings(onRomanizeJapaneseChange = repository::setRomanizeJapanese) }
     val playback by monitor.active.collectAsState()
@@ -130,9 +130,9 @@ fun main() = application {
         repository.followPlayback(monitor)
         // Load JNA's native side before the first drag so the window does not
         // lag behind the cursor.
-        scope.launch(Dispatchers.IO) { LinuxWindowMover.warmUp() }
-        scope.launch(Dispatchers.IO) { LinuxClickThrough.warmUp() }
-        scope.launch(Dispatchers.IO) { Autostart.refresh() }
+        scope.launch(Dispatchers.IO) { platform.windowMover.warmUp() }
+        scope.launch(Dispatchers.IO) { platform.clickThrough.warmUp() }
+        scope.launch(Dispatchers.IO) { platform.autostart.refresh() }
     }
     LaunchedEffect(settings.preferredPlayer) {
         monitor.preferredIdentity = settings.preferredPlayer
@@ -147,15 +147,17 @@ fun main() = application {
         settings.clickPassThrough = !settings.clickPassThrough
     }
     DisposableEffect(Unit) {
-        val tray = LinuxSniTray(
-            onToggleOverlay = { overlayVisible = !overlayVisible },
-            onSearch = { searchVisible = true },
-            onSettings = { settingsVisible = true },
-            onTiming = { timingVisible = true },
-            onToggleClickPassThrough = toggleClickPassThrough,
-            clickPassThroughEnabled = { settings.clickPassThrough },
-            overlayVisible = { overlayVisible },
-            onQuit = quit,
+        val tray = platform.createTray(
+            TrayActions(
+                onToggleOverlay = { overlayVisible = !overlayVisible },
+                onSearch = { searchVisible = true },
+                onSettings = { settingsVisible = true },
+                onTiming = { timingVisible = true },
+                onToggleClickPassThrough = toggleClickPassThrough,
+                clickPassThroughEnabled = { settings.clickPassThrough },
+                overlayVisible = { overlayVisible },
+                onQuit = quit,
+            ),
         )
         tray.start()
         onDispose { tray.stop() }
@@ -183,7 +185,7 @@ fun main() = application {
             // Keep the floating lyrics out of the taskbar and window switcher.
             runCatching { window.type = java.awt.Window.Type.UTILITY }
             window.iconImage = requireNotNull(
-                LinuxSniTray::class.java.classLoader.getResourceAsStream("icons/lyrics-float.png"),
+                DesktopPlatform::class.java.classLoader.getResourceAsStream("icons/lyrics-float.png"),
             ) { "missing taskbar icon" }.use(ImageIO::read)
             onDispose { window.iconImage = null }
         }
@@ -199,9 +201,9 @@ fun main() = application {
         // XWayland sends pointer events to the windows below. Keyed on
         // overlayShown because a hidden window has no XID to shape yet.
         DisposableEffect(settings.clickPassThrough, overlayShown) {
-            LinuxClickThrough.apply(window, settings.clickPassThrough)
+            platform.clickThrough.apply(window, settings.clickPassThrough)
             onDispose {
-                LinuxClickThrough.apply(window, false)
+                platform.clickThrough.apply(window, false)
             }
         }
 
@@ -482,21 +484,18 @@ private fun openLyricsWebSearch(query: String) {
     val url = "https://www.google.com/search?q=" +
         java.net.URLEncoder.encode("$trimmed lyrics", Charsets.UTF_8)
     val opened = runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }.isSuccess
-    if (!opened) runCatching { ProcessBuilder("xdg-open", url).start() }
+    if (!opened && !isWindows) runCatching { ProcessBuilder("xdg-open", url).start() }
 }
 
 /**
  * GUI-launched apps have no terminal, so a crash would vanish without a
- * trace. Every uncaught exception lands in $XDG_DATA_HOME/lyricsfloat/crash.log.
+ * trace. Every uncaught exception lands in $XDG_DATA_HOME/lyricsfloat/crash.log
+ * (%LOCALAPPDATA%\LyricsFloat\crash.log on Windows).
  */
 private fun installCrashLog() {
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
         runCatching {
-            val dir = File(
-                System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
-                    ?: (System.getProperty("user.home") + "/.local/share"),
-                "lyricsfloat",
-            ).apply { mkdirs() }
+            val dir = AppPaths.dataDir.apply { mkdirs() }
             File(dir, "crash.log").appendText(
                 buildString {
                     append("==== ")

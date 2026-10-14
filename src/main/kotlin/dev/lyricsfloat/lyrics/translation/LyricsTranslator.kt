@@ -3,6 +3,7 @@ package dev.lyricsfloat.lyrics.translation
 import dev.lyricsfloat.lyrics.JapaneseRomaji
 import dev.lyricsfloat.lyrics.LyricsEntry
 import dev.lyricsfloat.lyrics.LyricsState
+import dev.lyricsfloat.platform.AppPaths
 import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
@@ -182,11 +183,7 @@ class LyricsTranslator(
             return if (hasKana) entries else emptyList()
         }
 
-        fun defaultDirectory(name: String): File {
-            val dataHome = System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
-                ?: (System.getProperty("user.home") + "/.local/share")
-            return File(dataHome, "lyricsfloat/$name")
-        }
+        fun defaultDirectory(name: String): File = File(AppPaths.dataDir, name)
     }
 }
 
