@@ -1,3 +1,7 @@
+# On Windows, run recipes in Windows PowerShell; `./gradlew` resolves to
+# gradlew.bat there. Linux keeps the default sh.
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
 # List available recipes.
 default:
     @just --list
@@ -18,6 +22,14 @@ build:
 # Build the AppImage and stage a timestamped copy in _apk/.
 build-appimage:
     ./gradlew stageAppImage
+
+# Windows only: build the MSI and EXE installers into build/compose/binaries/main/.
+build-windows:
+    ./gradlew packageMsi packageExe
+
+# Windows only: build the EXE installer and stage a timestamped copy in _apk/.
+build-exe:
+    ./gradlew stageExe
 
 # Build the AppImage and install it to ~/apps with a desktop entry, so
 # KDE/vicinae launchers can start it by name regardless of build file names.

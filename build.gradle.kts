@@ -23,7 +23,8 @@ dependencies {
     implementation("org.jetbrains.compose.components:components-resources:1.11.0")
     implementation("org.jetbrains.compose.material3:material3:1.9.0-alpha04")
 
-    // MPRIS (song detection) and the StatusNotifierItem tray both run over the session bus.
+    // MPRIS (song detection) and the StatusNotifierItem tray both run over the session bus
+    // on Linux. Windows never opens a bus connection, so these stay unused there.
     implementation("com.github.hypfvieh:dbus-java-core:5.2.1")
     implementation("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.2.1")
 
@@ -58,14 +59,29 @@ compose.desktop {
 
         nativeDistributions {
             modules("jdk.security.auth")
-            targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
+            // Each format builds only on its own OS: Linux packages on Linux,
+            // Msi/Exe on Windows (jpackage cannot cross-build).
+            targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "lyrics-float"
             packageVersion = "0.1.0"
-            description = "Floating synced lyrics for any MPRIS player on Linux"
+            description = "Floating synced lyrics for your desktop music player"
             copyright = "Copyright © 2026 Uzuki-P"
 
             linux {
                 iconFile.set(project.file("src/main/resources/icons/lyrics-float.png"))
+            }
+
+            windows {
+                iconFile.set(project.file("packaging/windows/lyrics-float.ico"))
+                menuGroup = "Lyrics Float"
+                // Per-user install: no admin prompt, and the HKCU Run key used
+                // for "Start on login" points at a path the user owns.
+                perUserInstall = true
+                dirChooser = true
+                shortcut = true
+                menu = true
+                // Keep fixed so new installers upgrade old installs in place.
+                upgradeUuid = "73262e85-d80f-43e5-aa86-66b471eb2148"
             }
         }
     }
@@ -132,19 +148,28 @@ tasks.register("packageAppImageFile") {
 }
 
 // Keep the build output in build/ and stage a dated copy for sharing.
+fun stageArtifact(artifact: File, stagedDir: File) {
+    check(artifact.isFile) { "Missing artifact: $artifact" }
+    val timestamp = LocalDateTime.now()
+        .format(DateTimeFormatter.ofPattern("dd-MMM_HH-mm", Locale.ROOT)).lowercase(Locale.ROOT)
+    val staged = File(stagedDir, "${artifact.nameWithoutExtension}_$timestamp.${artifact.extension}")
+    staged.parentFile.mkdirs()
+    artifact.copyTo(staged, overwrite = true)
+    staged.setExecutable(artifact.canExecute())
+    println("Staged artifact: ${staged.absolutePath}")
+}
+
 tasks.register("stageAppImage") {
     dependsOn("packageAppImageFile")
     val source = layout.buildDirectory.file("compose/binaries/main/appimage/lyrics-float-${project.version}.AppImage")
     val stagedDir = layout.projectDirectory.dir("_apk")
-    doLast {
-        val artifact = source.get().asFile
-        check(artifact.isFile) { "Missing AppImage: $artifact" }
-        val timestamp = LocalDateTime.now()
-            .format(DateTimeFormatter.ofPattern("dd-MMM_HH-mm", Locale.ROOT)).lowercase(Locale.ROOT)
-        val staged = stagedDir.file("${artifact.nameWithoutExtension}_$timestamp.AppImage").asFile
-        staged.parentFile.mkdirs()
-        artifact.copyTo(staged, overwrite = true)
-        staged.setExecutable(artifact.canExecute())
-        println("Staged artifact: ${staged.absolutePath}")
-    }
+    doLast { stageArtifact(source.get().asFile, stagedDir.asFile) }
+}
+
+// Windows only: Compose's packageExe runs jpackage + WiX on the host OS.
+tasks.register("stageExe") {
+    dependsOn("packageExe")
+    val source = layout.buildDirectory.file("compose/binaries/main/exe/lyrics-float-${project.version}.exe")
+    val stagedDir = layout.projectDirectory.dir("_apk")
+    doLast { stageArtifact(source.get().asFile, stagedDir.asFile) }
 }
