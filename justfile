@@ -23,12 +23,9 @@ build:
 build-appimage:
     ./gradlew stageAppImage
 
-# Windows only: build the portable app; run build/compose/binaries/main/app/lyrics-float/lyrics-float.exe.
+# Windows only: build the portable app (lyrics-float.exe plus its runtime
+# folder) and stage a timestamped zip in _apk/.
 build-exe:
-    ./gradlew createDistributable
-
-# Windows only: build the portable app and stage a timestamped zip in _apk/.
-build-portable:
     ./gradlew stagePortable
 
 # Build the AppImage and install it to ~/apps with a desktop entry, so

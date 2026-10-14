@@ -167,7 +167,7 @@ tasks.register("stageAppImage") {
 val portableZip = tasks.register<Zip>("packagePortableZip") {
     dependsOn("createDistributable")
     from(layout.buildDirectory.dir("compose/binaries/main/app"))
-    archiveFileName.set("lyrics-float-${project.version}-windows.zip")
+    archiveFileName.set("lyrics-float-${project.version}.zip")
     destinationDirectory.set(layout.buildDirectory.dir("compose/binaries/main/portable"))
 }
 
