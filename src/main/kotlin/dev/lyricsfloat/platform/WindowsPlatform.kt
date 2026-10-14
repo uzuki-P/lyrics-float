@@ -17,7 +17,8 @@ internal object WindowsPlatform : DesktopPlatform {
     override val clickThrough: ClickThrough get() = WindowsClickThrough
     override val autostart: AutostartEntry get() = WindowsAutostart
     override val noPlayersMessage =
-        "No media sessions detected. The player must support Windows media controls."
+        "No media sessions detected. The player must support Windows media controls, and Windows " +
+            "PowerShell must be allowed to run (errors go to %LOCALAPPDATA%\\LyricsFloat\\smtc-helper.log)."
 
     override fun createNowPlayingSource(): NowPlayingSource = SmtcNowPlayingMonitor()
 

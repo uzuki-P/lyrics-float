@@ -5,13 +5,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -115,18 +116,28 @@ class SmtcNowPlayingMonitor : NowPlayingSource {
             redirectError(ProcessBuilder.Redirect.to(log))
         }.start()
         process.outputStream.close()
-        // Blocking readLine cannot be cancelled; killing the helper ends it.
-        val cancelHandle = coroutineContext.job.invokeOnCompletion { process.destroyForcibly() }
         try {
-            process.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
-                for (line in lines) {
-                    coroutineContext.ensureActive()
-                    val snapshot = parseSmtcLine(line) ?: continue
-                    apply(snapshot)
+            coroutineScope {
+                // Blocking readLine cannot be cancelled, and the job cannot
+                // complete while it blocks; a sibling kills the helper as soon
+                // as cancellation starts, which ends the read.
+                val killer = launch {
+                    try {
+                        awaitCancellation()
+                    } finally {
+                        process.destroyForcibly()
+                    }
                 }
+                process.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                    for (line in lines) {
+                        ensureActive()
+                        val snapshot = parseSmtcLine(line) ?: continue
+                        apply(snapshot)
+                    }
+                }
+                killer.cancel()
             }
         } finally {
-            cancelHandle.dispose()
             process.destroyForcibly()
         }
     }
@@ -147,7 +158,10 @@ class SmtcNowPlayingMonitor : NowPlayingSource {
             .sortedBy { it.identity.lowercase() }
         if (players != playersInternal.value) playersInternal.value = players
 
-        val choices = runtimes.values.map { SmtcChoice(it.busName, it.identity, it.status) }
+        // Snapshot order, not hash order, so ties resolve the same way every tick.
+        val choices = snapshot.sessions.mapNotNull { session ->
+            runtimes[session.key]?.let { SmtcChoice(it.busName, it.identity, it.status) }
+        }
         val selected = chooseSmtcSession(choices, currentKey, preferredIdentity, snapshot.current)
         currentKey = selected
         activeInternal.value = selected?.let { runtimes[it]?.snapshot() }
@@ -258,8 +272,9 @@ internal data class SmtcChoice(val key: String, val identity: String, val status
 
 /**
  * Same order as the MPRIS heuristic: the preferred player, then the current
- * one while it plays, then any playing session. When nothing plays, Windows'
- * own current session wins over an arbitrary first one.
+ * one while it plays, then a playing session, preferring the one Windows
+ * itself treats as current. When nothing plays, the current pick stays, then
+ * Windows' current session, then the first one.
  */
 internal fun chooseSmtcSession(
     sessions: List<SmtcChoice>,
@@ -273,6 +288,9 @@ internal fun chooseSmtcSession(
     }
     current?.let { key ->
         if (sessions.any { it.key == key && it.status == PlaybackStatus.PLAYING }) return key
+    }
+    systemCurrentApp?.let { app ->
+        sessions.firstOrNull { it.key == app && it.status == PlaybackStatus.PLAYING }?.let { return it.key }
     }
     sessions.firstOrNull { it.status == PlaybackStatus.PLAYING }?.let { return it.key }
     current?.takeIf { key -> sessions.any { it.key == key } }?.let { return it }

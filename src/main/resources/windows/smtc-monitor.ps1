@@ -10,8 +10,11 @@
 
 $ErrorActionPreference = 'Stop'
 # Song titles are often non-ASCII; the default console code page would
-# mangle them on the way to the JVM.
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+# mangle them on the way to the JVM. Write UTF-8 straight to the stdout
+# stream: setting [Console]::OutputEncoding does not rebuild a Console.Out
+# the host already created.
+$stdout = New-Object System.IO.StreamWriter([Console]::OpenStandardOutput(), (New-Object System.Text.UTF8Encoding $false))
+$stdout.AutoFlush = $true
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
@@ -40,6 +43,7 @@ if ($null -eq $manager) {
 $parentPid = 0
 [void][int]::TryParse("$env:LYRICSFLOAT_PARENT_PID", [ref]$parentPid)
 $tick = 0
+$lastError = ''
 
 while ($true) {
     # Exit with the app even if it dies without closing our stdout.
@@ -61,7 +65,10 @@ while ($true) {
         try {
             $app = [string]$session.SourceAppUserModelId
             # Two tabs of one browser share an app id; number the repeats so
-            # each session keeps its own key.
+            # each session keeps its own key. The numbers follow
+            # GetSessions() order, so closing an earlier tab can shift a
+            # later tab onto its key; the Kotlin side rebases on the
+            # resulting track change.
             $count = 0
             if ($seen.ContainsKey($app)) { $count = $seen[$app] }
             $seen[$app] = $count + 1
@@ -110,12 +117,17 @@ while ($true) {
                 album = $album
             })
         } catch {
-            [Console]::Error.WriteLine("session read failed: $_")
+            # Log each distinct failure once; a session that keeps failing
+            # would otherwise grow the log four times a second.
+            $message = "session read failed: $_"
+            if ($message -ne $lastError) {
+                [Console]::Error.WriteLine($message)
+                $lastError = $message
+            }
         }
     }
 
     $line = ConvertTo-Json -InputObject ([ordered]@{ current = $current; sessions = $sessions.ToArray() }) -Compress -Depth 4
-    [Console]::Out.WriteLine($line)
-    [Console]::Out.Flush()
+    $stdout.WriteLine($line)
     Start-Sleep -Milliseconds 250
 }

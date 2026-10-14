@@ -79,5 +79,10 @@ class SmtcNowPlayingTest {
         // No current one yet: Windows' own current session.
         assertEquals("msedge", chooseSmtcSession(idle, null, null, "msedge"))
         assertEquals("Spotify.exe", chooseSmtcSession(idle, null, null, null))
+        // Several playing: Windows' current session beats list order.
+        val video = SmtcChoice("msedge", "Microsoft Edge", PlaybackStatus.PLAYING)
+        val music = SmtcChoice("Spotify.exe", "Spotify", PlaybackStatus.PLAYING)
+        assertEquals("Spotify.exe", chooseSmtcSession(listOf(video, music), null, null, "Spotify.exe"))
+        assertEquals("msedge", chooseSmtcSession(listOf(video, music), null, null, null))
     }
 }

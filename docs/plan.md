@@ -443,8 +443,9 @@ behind the new interfaces. Windows-only classes load only when
       reads every `GlobalSystemMediaTransportControlsSession` and prints a
       JSON line every 250 ms. Positions advance from `LastUpdatedTime` while
       playing. The Kotlin side reuses the MPRIS clock (`PlayerRuntime`) and
-      selection order, falls back to Windows' current session, and restarts
-      the helper with backoff. Unit tests cover parsing, names and selection.
+      selection order, prefers Windows' current session when several play
+      or none does, and restarts the helper with backoff (killed promptly on
+      cancel; errors logged once to `smtc-helper.log`). Unit tests cover parsing, names and selection.
 - [x] Tray: AWT `SystemTray` with the same menu (show/hide, search,
       timing, settings, pass-through, quit). Left click toggles the lyrics.
 - [x] Window drag/resize: no native hand-off; the manual fallback follows
