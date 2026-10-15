@@ -149,12 +149,22 @@ fun OverlayView(
                     text = "Play something in any media player",
                 )
                 loading -> OverlayHint(text = "Looking up lyrics…", busy = true)
-                entries.isEmpty() -> OverlayHint(
-                    icon = AppIcons.MusicNote,
-                    text = "No lyrics found",
-                    actionLabel = "Search lyrics",
-                    onAction = onSearch,
-                )
+                // With click pass-through on, the pill cannot be clicked, so a
+                // dead button would only confuse. Point to the tray menu instead.
+                entries.isEmpty() -> if (settings.clickPassThrough) {
+                    OverlayHint(
+                        icon = AppIcons.MusicNote,
+                        text = "No lyrics found",
+                        note = "Click pass-through is on. Search from the tray icon's menu.",
+                    )
+                } else {
+                    OverlayHint(
+                        icon = AppIcons.MusicNote,
+                        text = "No lyrics found",
+                        actionLabel = "Search lyrics",
+                        onAction = onSearch,
+                    )
+                }
                 else -> LyricsViewport(
                     lyrics = lyrics,
                     items = items,
@@ -217,6 +227,7 @@ private fun OverlayHint(
     busy: Boolean = false,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    note: String? = null,
 ) {
     val palette = LocalAppPalette.current
     Column(
@@ -244,6 +255,15 @@ private fun OverlayHint(
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(8.dp))
             OverlayPillButton(label = actionLabel, icon = AppIcons.Search, onClick = onAction)
+        }
+        if (note != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = note,
+                style = TextStyle(fontSize = 12.sp, shadow = TEXT_SHADOW),
+                color = Color.White.copy(alpha = 0.65f),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
