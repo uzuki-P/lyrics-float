@@ -44,7 +44,11 @@ Keep Linux behavior unchanged when touching platform code.
   (stable name) and registers the KDE/vicinae launcher entry
   (`scripts/install-appimage`, `--uninstall` to remove). `just update` builds,
   stages a dated `_apk/` copy, and installs in one command. On Windows,
-  `just build-exe` builds the installer and stages it in `_apk/`.
+  `just build-exe` builds the installer and stages it in `_apk/`, and
+  `just update-exe` swaps the installed app's files in place without the
+  installer (`scripts/update-installed-exe.ps1`: only `lyrics-float.exe`,
+  `app\` and `runtime\` in the registered install folder; it needs one
+  installer run first and leaves the registry version as is).
 - The app version is `0.1.<commit count>` (`git rev-list --count HEAD`,
   computed in `build.gradle.kts`), so it only goes up with a new commit.
   Commit before `just build-exe`: the Windows installer refuses to reinstall

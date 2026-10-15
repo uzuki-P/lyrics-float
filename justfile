@@ -27,6 +27,14 @@ build-appimage:
 build-exe:
     ./gradlew stageExe
 
+# Windows only: rebuild and swap the files of the installed app in place,
+# without the installer. Touches only lyrics-float.exe, app\ and runtime\ in
+# the registered install folder; settings and caches stay. Needs one install
+# from build-exe first.
+update-exe:
+    ./gradlew createDistributable
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/update-installed-exe.ps1
+
 # Build the AppImage and install it to ~/apps with a desktop entry, so
 # KDE/vicinae launchers can start it by name regardless of build file names.
 install:
