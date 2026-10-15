@@ -1,6 +1,7 @@
 package dev.lyricsfloat.lyrics.translation
 
 import dev.lyricsfloat.platform.AppState
+import dev.lyricsfloat.platform.isWindows
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -125,12 +126,13 @@ object T3CodeClient {
     /** The `t3` launcher the desktop app installs; null when T3 Code is not set up. */
     private fun cliPath(): File? {
         val home = System.getProperty("user.home")
-        val candidates = listOfNotNull(
-            System.getenv("T3CODE_CLI_PATH")?.takeIf { it.isNotBlank() },
-            File(t3Home(), "bin/t3").path,
-            "$home/.local/bin/t3",
-        ) + System.getenv("PATH").orEmpty().split(':').filter { it.isNotBlank() }.map { "$it/t3" }
-        return candidates.map(::File).firstOrNull { it.canExecute() }
+        // Windows launchers carry an extension; PATH uses ';' there.
+        val names = if (isWindows) listOf("t3.exe", "t3.cmd", "t3.bat") else listOf("t3")
+        val directories = listOf(File(t3Home(), "bin").path, "$home/.local/bin") +
+            System.getenv("PATH").orEmpty().split(File.pathSeparatorChar).filter { it.isNotBlank() }
+        val candidates = listOfNotNull(System.getenv("T3CODE_CLI_PATH")?.takeIf { it.isNotBlank() }) +
+            directories.flatMap { directory -> names.map { "$directory/$it" } }
+        return candidates.map(::File).firstOrNull { it.isFile && it.canExecute() }
     }
 
     /**

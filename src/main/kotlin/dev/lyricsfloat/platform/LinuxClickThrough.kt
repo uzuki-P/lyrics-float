@@ -44,14 +44,14 @@ private const val YX_BANDED = 3
  * underneath). Pass-through removes the entire input region, including the
  * hover menu.
  */
-object LinuxClickThrough {
+object LinuxClickThrough : ClickThrough {
     private val lock = Any()
     private var xext: X11ShapeExt? = null
     private var display: X11.Display? = null
 
     // Loading JNA's native side is slow; same warm-up pattern as
     // LinuxWindowMover so the first toggle does not stutter.
-    fun warmUp() {
+    override fun warmUp() {
         try {
             connection()
         } catch (_: Throwable) {
@@ -63,7 +63,7 @@ object LinuxClickThrough {
      * empty; with it off, the input shape is removed (mask None + ShapeSet
      * restores the default region).
      */
-    fun apply(window: Window, passThrough: Boolean) {
+    override fun apply(window: Window, passThrough: Boolean) {
         try {
             val (link, conn) = connection() ?: return
             val target = X11.Window(Native.getWindowID(window))

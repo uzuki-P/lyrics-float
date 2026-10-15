@@ -1,6 +1,7 @@
 package dev.lyricsfloat.lyrics
 
 import dev.lyricsfloat.mpris.TrackInfo
+import dev.lyricsfloat.platform.AppPaths
 import java.io.File
 import java.security.MessageDigest
 import java.nio.file.Files
@@ -92,10 +93,6 @@ internal class LyricsDiskCache(private val directory: File = defaultDirectory())
     }
 
     companion object {
-        private fun defaultDirectory(): File {
-            val dataHome = System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
-                ?: (System.getProperty("user.home") + "/.local/share")
-            return File(dataHome, "lyricsfloat/lyrics")
-        }
+        private fun defaultDirectory(): File = File(AppPaths.dataDir, "lyrics")
     }
 }

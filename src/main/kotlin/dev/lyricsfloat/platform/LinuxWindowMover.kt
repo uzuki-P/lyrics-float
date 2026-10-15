@@ -22,7 +22,7 @@ private const val MOVE_HINT = 8L
  * WM's own move/resize tracks the pointer per frame, exactly like dragging a
  * real title bar or edge.
  */
-object LinuxWindowMover {
+object LinuxWindowMover : WindowMover {
     private val lock = Any()
     private var x11: X11PointerControl? = null
     private var display: X11.Display? = null
@@ -30,7 +30,7 @@ object LinuxWindowMover {
     // Loading JNA's native side is slow; doing it on the UI thread during the
     // first drag leaves the window lagging behind the cursor. Call this from a
     // background thread early in the app's life.
-    fun warmUp() {
+    override fun warmUp() {
         try {
             connection()
         } catch (_: Throwable) {
@@ -40,12 +40,12 @@ object LinuxWindowMover {
     // Asks the window manager to run a native interactive move of the window,
     // as if the user had dragged its title bar. Returns false when it cannot
     // work; callers should fall back to setLocation.
-    fun requestInteractiveMove(window: Window): Boolean =
+    override fun requestInteractiveMove(window: Window): Boolean =
         requestInteractive(window, MOVE_HINT)
 
     // Same message with a directional hint (0-7): a native interactive resize,
     // as if the user had grabbed the matching window edge or corner.
-    fun requestInteractiveResize(window: Window, direction: Int): Boolean {
+    override fun requestInteractiveResize(window: Window, direction: Int): Boolean {
         require(direction in 0..7) { "resize direction must be an EWMH hint 0-7" }
         return requestInteractive(window, direction.toLong())
     }

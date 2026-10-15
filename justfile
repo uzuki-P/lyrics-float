@@ -1,6 +1,10 @@
+# On Windows, run recipes in Windows PowerShell; `./gradlew` resolves to
+# gradlew.bat there. Linux keeps the default sh.
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
 # List available recipes.
 default:
-    @just --list
+    @{{just_executable()}} --list
 
 # Run the desktop app in development mode.
 dev:
@@ -18,6 +22,18 @@ build:
 # Build the AppImage and stage a timestamped copy in _apk/.
 build-appimage:
     ./gradlew stageAppImage
+
+# Windows only: build the EXE installer and stage a timestamped copy in _apk/.
+build-exe:
+    ./gradlew stageExe
+
+# Windows only: rebuild and swap the files of the installed app in place,
+# without the installer. Touches only lyrics-float.exe, app\ and runtime\ in
+# the registered install folder; settings and caches stay. Needs one install
+# from build-exe first.
+update-exe:
+    ./gradlew createDistributable
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/update-installed-exe.ps1
 
 # Build the AppImage and install it to ~/apps with a desktop entry, so
 # KDE/vicinae launchers can start it by name regardless of build file names.

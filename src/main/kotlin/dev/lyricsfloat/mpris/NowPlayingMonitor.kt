@@ -20,7 +20,6 @@ import org.freedesktop.dbus.messages.DBusSignal
 import org.freedesktop.dbus.types.Variant
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
-import kotlin.math.abs
 
 /** MPRIS Seeked signal, so lyric sync reacts to seeking without waiting for the next poll. */
 @DBusInterfaceName("org.mpris.MediaPlayer2.Player")
@@ -41,12 +40,12 @@ interface MprisPlayer : DBusInterface {
  * Correctness never depends on signals: a 250 ms GetAll poll is the source of
  * truth, Seeked and PropertiesChanged only make updates instant when they arrive.
  */
-class NowPlayingMonitor {
+class NowPlayingMonitor : NowPlayingSource {
     private val playersInternal = MutableStateFlow<List<PlayerInfo>>(emptyList())
-    val players: StateFlow<List<PlayerInfo>> = playersInternal.asStateFlow()
+    override val players: StateFlow<List<PlayerInfo>> = playersInternal.asStateFlow()
 
     private val activeInternal = MutableStateFlow<ActivePlayback?>(null)
-    val active: StateFlow<ActivePlayback?> = activeInternal.asStateFlow()
+    override val active: StateFlow<ActivePlayback?> = activeInternal.asStateFlow()
 
     private var connection: DBusConnection? = null
     private var job: Job? = null
@@ -58,14 +57,14 @@ class NowPlayingMonitor {
 
     /** Preferred player identity; null means "auto" (the KDE multiplexer heuristic). */
     @Volatile
-    var preferredIdentity: String? = null
+    override var preferredIdentity: String? = null
 
-    fun start(scope: CoroutineScope) {
+    override fun start(scope: CoroutineScope) {
         if (job != null) return
         job = scope.launch(Dispatchers.IO) { run() }
     }
 
-    fun stop() {
+    override fun stop() {
         job?.cancel()
         job = null
         connection?.let { runCatching { it.disconnect() } }
@@ -256,68 +255,11 @@ class NowPlayingMonitor {
         else -> null
     }
 
-    /** Per-player state that survives between polls, so signals can rebase the position clock. */
-    private class PlayerRuntime(val busName: String, val identity: String) {
-        @Volatile var status: PlaybackStatus = PlaybackStatus.STOPPED
-        @Volatile var rate: Double = 1.0
-        @Volatile var track: TrackInfo? = null
-        @Volatile private var basePositionUs: Long = 0
-        @Volatile private var baseNs: Long = System.nanoTime()
-        @Volatile private var stale: Boolean = false
-
-        fun update(status: PlaybackStatus, rate: Double, positionUs: Long, track: TrackInfo?) {
-            val statusChanged = status != this.status
-            val rateChanged = rate != this.rate
-            val trackChanged = trackIdOf(track) != trackIdOf(this.track)
-            this.status = status
-            this.rate = rate
-            this.track = track
-            val drifted = abs(positionUs - observedUs()) > REBASE_TOLERANCE_US
-            // Re-base on any discontinuity; steady-state polls just let the clock run.
-            if (statusChanged || rateChanged || trackChanged || stale || drifted ||
-                status == PlaybackStatus.STOPPED
-            ) {
-                basePositionUs = if (status == PlaybackStatus.STOPPED) 0 else positionUs
-                baseNs = System.nanoTime()
-                stale = false
-            }
-        }
-
-        fun seeked(positionUs: Long) {
-            basePositionUs = positionUs
-            baseNs = System.nanoTime()
-            stale = false
-        }
-
-        fun markStale() {
-            stale = true
-        }
-
-        private fun observedUs(): Long {
-            if (status != PlaybackStatus.PLAYING) return basePositionUs
-            val elapsedUs = (System.nanoTime() - baseNs) / 1000
-            return basePositionUs + (elapsedUs * rate).toLong()
-        }
-
-        fun snapshot() = ActivePlayback(
-            busName = busName,
-            identity = identity,
-            track = track,
-            status = status,
-            rate = rate,
-            basePositionUs = basePositionUs,
-            baseMonotonicNs = baseNs,
-        )
-
-        private fun trackIdOf(track: TrackInfo?): String = track?.trackId ?: ""
-    }
-
     companion object {
         const val MPRIS_PREFIX = "org.mpris.MediaPlayer2."
         const val OBJECT_PATH = "/org/mpris/MediaPlayer2"
         const val ROOT_IFACE = "org.mpris.MediaPlayer2"
         const val PLAYER_IFACE = "org.mpris.MediaPlayer2.Player"
         const val POLL_MS = 250L
-        private const val REBASE_TOLERANCE_US = 500_000L // 500 ms
     }
 }

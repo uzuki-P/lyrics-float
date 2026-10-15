@@ -22,8 +22,9 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import dev.lyricsfloat.platform.LinuxWindowMover
+import dev.lyricsfloat.platform.DesktopPlatform
 import java.awt.Cursor
+import java.awt.MouseInfo
 import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Window
@@ -38,26 +39,32 @@ import kotlin.math.roundToInt
  * The WM's interactive move consumes the pointer release, so [onDragEnd]
  * fires as a cancel (or not at all) for native moves; callers that persist
  * geometry should also watch AWT component events.
+ *
+ * Windows has no WM-driven move here; its fallback follows the absolute
+ * screen pointer, because window-local drag deltas shift as the window moves
+ * under the pointer.
  */
 fun Modifier.windowDragHandle(window: Window, onDragEnd: () -> Unit = {}): Modifier = composed {
     val density = LocalDensity.current
+    val mover = DesktopPlatform.current.windowMover
     pointerInput(window, density) {
         var base: Point? = null
         var delta = Offset.Zero
+        var pointerStart: Point? = null
         detectDragGestures(
             onDragStart = {
-                val native = LinuxWindowMover.requestInteractiveMove(window)
+                val native = mover.requestInteractiveMove(window)
                 base = if (native) null else Point(window.x, window.y)
                 delta = Offset.Zero
+                pointerStart = screenPointerStart(native, mover.fallbackTracksScreenPointer)
             },
             onDrag = { change, amount ->
                 change.consume()
                 base?.let { start ->
                     delta += amount
-                    window.setLocation(
-                        start.x + (delta.x * density.density).roundToInt(),
-                        start.y + (delta.y * density.density).roundToInt(),
-                    )
+                    val (dx, dy) = screenPointerDelta(pointerStart)
+                        ?: ((delta.x * density.density).roundToInt() to (delta.y * density.density).roundToInt())
+                    window.setLocation(start.x + dx, start.y + dy)
                 }
             },
             onDragEnd = {
@@ -84,6 +91,7 @@ fun Modifier.windowDragHandle(window: Window, onDragEnd: () -> Unit = {}): Modif
 @Composable
 fun BoxScope.WindowResizeZones(window: Window) {
     val density = LocalDensity.current
+    val mover = DesktopPlatform.current.windowMover
 
     @Composable
     fun Handle(direction: Int, modifier: Modifier) {
@@ -95,6 +103,7 @@ fun BoxScope.WindowResizeZones(window: Window) {
         }
         var manualBase by remember(window, direction) { mutableStateOf<Rectangle?>(null) }
         var dragDelta by remember(window, direction) { mutableStateOf(Offset.Zero) }
+        var pointerStart by remember(window, direction) { mutableStateOf<Point?>(null) }
         Box(
             modifier
                 .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(cursor)))
@@ -102,14 +111,16 @@ fun BoxScope.WindowResizeZones(window: Window) {
                     detectDragGestures(
                         onDragStart = {
                             dragDelta = Offset.Zero
-                            manualBase = if (LinuxWindowMover.requestInteractiveResize(window, direction)) null else window.bounds
+                            val native = mover.requestInteractiveResize(window, direction)
+                            manualBase = if (native) null else window.bounds
+                            pointerStart = screenPointerStart(native, mover.fallbackTracksScreenPointer)
                         },
                         onDrag = { change, amount ->
                             change.consume()
                             manualBase?.let { base ->
                                 dragDelta += amount
-                                val dx = (dragDelta.x * density.density).roundToInt()
-                                val dy = (dragDelta.y * density.density).roundToInt()
+                                val (dx, dy) = screenPointerDelta(pointerStart)
+                                    ?: ((dragDelta.x * density.density).roundToInt() to (dragDelta.y * density.density).roundToInt())
                                 val left = direction == 0 || direction == 3 || direction == 5
                                 val top = direction == 0 || direction == 1 || direction == 2
                                 val right = direction == 2 || direction == 4 || direction == 7
@@ -138,4 +149,15 @@ fun BoxScope.WindowResizeZones(window: Window) {
     Handle(6, Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.72f).height(10.dp))
     Handle(3, Modifier.align(Alignment.CenterStart).width(10.dp).fillMaxHeight(0.72f))
     Handle(4, Modifier.align(Alignment.CenterEnd).width(10.dp).fillMaxHeight(0.72f))
+}
+
+// Pointer position at drag start for the screen-pointer fallback; null keeps
+// the Compose delta path (Linux) or a native gesture.
+private fun screenPointerStart(native: Boolean, tracksScreenPointer: Boolean): Point? =
+    if (!native && tracksScreenPointer) MouseInfo.getPointerInfo()?.location else null
+
+private fun screenPointerDelta(start: Point?): Pair<Int, Int>? {
+    val origin = start ?: return null
+    val now = MouseInfo.getPointerInfo()?.location ?: return null
+    return (now.x - origin.x) to (now.y - origin.y)
 }

@@ -1,6 +1,6 @@
 package dev.lyricsfloat.lyrics
 
-import dev.lyricsfloat.mpris.NowPlayingMonitor
+import dev.lyricsfloat.mpris.NowPlayingSource
 import dev.lyricsfloat.mpris.TrackInfo
 import dev.lyricsfloat.platform.AppState
 import kotlinx.coroutines.CoroutineScope
@@ -123,7 +123,7 @@ class LyricsRepository(private val scope: CoroutineScope) {
      * Keeps [current] following the MPRIS playback: fetches lyrics per track from
      * LRCLIB, caches them in memory, and applies per-track manual overrides.
      */
-    fun followPlayback(monitor: NowPlayingMonitor) {
+    fun followPlayback(monitor: NowPlayingSource) {
         scope.launch {
             // The monitor emits a fresh snapshot every poll; only act when the
             // playing track (or its absence) changes.

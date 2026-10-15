@@ -171,11 +171,11 @@ class LinuxSniTray(
     private val clickPassThroughEnabled: () -> Boolean,
     private val overlayVisible: () -> Boolean,
     private val onQuit: () -> Unit,
-) {
+) : AppTray {
     private var connection: DBusConnection? = null
     private val revision = AtomicInteger(1)
 
-    fun start() {
+    override fun start() {
         thread(name = "lyricsfloat-sni", isDaemon = true) {
             try {
                 val conn = DBusConnectionBuilder.forSessionBus().build()
@@ -197,7 +197,7 @@ class LinuxSniTray(
         }
     }
 
-    fun stop() {
+    override fun stop() {
         connection?.let { conn ->
             runCatching { conn.disconnect() }
             connection = null

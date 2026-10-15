@@ -6,15 +6,12 @@ import dev.lyricsfloat.ui.HoverMenuPosition
 import java.io.File
 
 /**
- * Persists app state as a simple key=value file at $XDG_CONFIG_HOME/lyricsfloat/state.properties.
+ * Persists app state as a simple key=value file at $XDG_CONFIG_HOME/lyricsfloat/state.properties
+ * (%APPDATA%\LyricsFloat\state.properties on Windows).
  * Values are enum names, ints, and one JSON blob for lyric overrides - no quoting needed.
  */
 object AppState {
-    val dir: File by lazy {
-        val configHome = System.getenv("XDG_CONFIG_HOME")?.takeIf { it.isNotBlank() }
-            ?: (System.getProperty("user.home") + "/.config")
-        File(configHome, "lyricsfloat").apply { mkdirs() }
-    }
+    val dir: File by lazy { AppPaths.configDir.apply { mkdirs() } }
     private val file: File get() = File(dir, "state.properties")
 
     private var cached: Map<String, String>? = null
