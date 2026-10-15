@@ -58,6 +58,27 @@ if ($running.Count -gt 0) {
     $running | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
 }
 
+# Rename in one step: Move-Item falls back to moving a folder file by file and
+# can stop halfway on a locked jar, while a .NET rename either fully happens
+# or fails without changing anything.
+function Rename-Atomic([string]$from, [string]$to) {
+    if (Test-Path -LiteralPath $from -PathType Container) { [IO.Directory]::Move($from, $to) }
+    else { [IO.File]::Move($from, $to) }
+}
+
+# A stopped app can keep its files open for a moment while it exits, so
+# retry the first rename until the handles are released.
+function Rename-WithRetry([string]$from, [string]$to) {
+    $deadline = (Get-Date).AddSeconds(15)
+    while ($true) {
+        try { Rename-Atomic $from $to; return }
+        catch {
+            if ((Get-Date) -gt $deadline) { throw }
+            Start-Sleep -Milliseconds 300
+        }
+    }
+}
+
 # Move the old items aside first so a failed copy can be rolled back.
 $stamp = Get-Date -Format 'yyyyMMddHHmmss'
 $backups = @{}
@@ -65,7 +86,7 @@ try {
     foreach ($item in $items) {
         $path = Join-Path $target $item
         $backup = "$path.old-$stamp"
-        Move-Item -LiteralPath $path -Destination $backup
+        Rename-WithRetry $path $backup
         $backups[$item] = $backup
     }
     foreach ($item in $items) {
@@ -76,8 +97,9 @@ try {
     foreach ($item in $backups.Keys) {
         $path = Join-Path $target $item
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
-        Move-Item -LiteralPath $backups[$item] -Destination $path
+        Rename-Atomic $backups[$item] $path
     }
+    if ($running.Count -gt 0) { Start-Process -FilePath (Join-Path $target 'lyrics-float.exe') }
     throw
 }
 foreach ($backup in $backups.Values) { Remove-Item -LiteralPath $backup -Recurse -Force }
