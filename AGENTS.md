@@ -45,6 +45,12 @@ Keep Linux behavior unchanged when touching platform code.
   (`scripts/install-appimage`, `--uninstall` to remove). `just update` builds,
   stages a dated `_apk/` copy, and installs in one command. On Windows,
   `just build-exe` builds the installer and stages it in `_apk/`.
+- The app version is `0.1.<commit count>` (`git rev-list --count HEAD`,
+  computed in `build.gradle.kts`), so it only goes up with a new commit.
+  Commit before `just build-exe`: the Windows installer refuses to reinstall
+  an equal version (MSI error 1638, just an error sound and no window), and
+  only a higher version upgrades the existing install in place. Never move
+  the build number into a 4th version field, since MSI ignores it.
 
 ## Conventions
 

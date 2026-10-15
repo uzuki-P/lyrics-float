@@ -12,7 +12,18 @@ plugins {
 }
 
 group = "dev.lyricsfloat"
-version = "0.1.0"
+
+// The patch number is the commit count so every committed build has a higher
+// version. Windows Installer only compares major.minor.build (each <= 255.255.65535)
+// and refuses to reinstall an equal version (error 1638), so a hash or a 4th field
+// would not work. Falls back to 0 when git is unavailable (e.g. a source tarball).
+val commitCount: Int = runCatching {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(0)
+version = "0.1.$commitCount"
 
 kotlin {
     jvmToolchain(17)
@@ -63,7 +74,7 @@ compose.desktop {
             // the Exe installer on Windows (jpackage cannot cross-build).
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Exe)
             packageName = "lyrics-float"
-            packageVersion = "0.1.0"
+            packageVersion = project.version.toString()
             description = "Floating synced lyrics for your desktop music player"
             copyright = "Copyright © 2026 Uzuki-P"
 
