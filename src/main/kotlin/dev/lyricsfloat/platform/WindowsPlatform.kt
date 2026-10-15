@@ -50,12 +50,28 @@ internal object WindowsClickThrough : ClickThrough {
     // pass-through off restores the style AWT set.
     private val addedLayered = WeakHashMap<Window, Boolean>()
 
+    // Latest requested state per window, so a pending retry never applies a
+    // stale request.
+    private val requested = WeakHashMap<Window, Boolean>()
+
+    // AWT makes a transparent window layered asynchronously after its
+    // background turns translucent, so on first launch apply() can run before
+    // the style lands. Wait this long for it before forcing a layered style.
+    private const val LAYERED_RETRY_MS = 50
+    private const val LAYERED_RETRIES = 20
+
     override fun warmUp() {
         runCatching { User32.INSTANCE }
     }
 
     override fun apply(window: Window, passThrough: Boolean) {
+        requested[window] = passThrough
+        apply(window, passThrough, LAYERED_RETRIES)
+    }
+
+    private fun apply(window: Window, passThrough: Boolean, retriesLeft: Int) {
         try {
+            if (requested[window] != passThrough) return
             if (!window.isDisplayable) return
             val hwnd = WinDef.HWND(Native.getWindowPointer(window) ?: return)
             val user32 = User32.INSTANCE
@@ -63,9 +79,18 @@ internal object WindowsClickThrough : ClickThrough {
             val next = if (passThrough) {
                 var value = style or WinUser.WS_EX_TRANSPARENT
                 if (style and WinUser.WS_EX_LAYERED == 0) {
-                    // Transparent AWT windows are normally layered already. If
-                    // this one is not, a fresh layered window stays invisible
-                    // until it gets attributes, so give it full opacity.
+                    if (retriesLeft > 0) {
+                        // Forcing the layered style now with constant alpha
+                        // would override AWT's per-pixel alpha and paint the
+                        // transparent background black. Retry until AWT adds it.
+                        javax.swing.Timer(LAYERED_RETRY_MS) { apply(window, passThrough, retriesLeft - 1) }
+                            .apply { isRepeats = false }
+                            .start()
+                        return
+                    }
+                    // Opaque windows never become layered on their own. A
+                    // fresh layered window stays invisible until it gets
+                    // attributes, so give it full opacity.
                     value = value or WinUser.WS_EX_LAYERED
                     user32.SetWindowLong(hwnd, WinUser.GWL_EXSTYLE, value)
                     user32.SetLayeredWindowAttributes(hwnd, 0, 255.toByte(), WinUser.LWA_ALPHA)
