@@ -35,7 +35,7 @@ update-exe:
     ./gradlew createDistributable
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/update-installed-exe.ps1
 
-# Build the EXE on GitHub Actions for the pushed HEAD, save it in _apk/, and share it via Gokapi.
+# Wait for the GitHub Actions EXE build of the pushed HEAD, save it in _apk/, and share it via Gokapi.
 ci-exe:
     bash scripts/ci-exe
 

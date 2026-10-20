@@ -1,10 +1,19 @@
 # Build the Windows EXE installer on a GitHub-hosted Windows runner.
 # Compose's packageExe needs jpackage + WiX on Windows, so Linux can't build it.
-# `just ci-exe` dispatches this workflow and downloads the artifact locally.
+# Runs on every push to main that touches more than docs; ci-exe-fetch.timer
+# (dotconfig) downloads the artifact locally, and `just ci-exe` waits for it.
 name: windows-exe
 
 on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**", ".scratch/**"]
   workflow_dispatch:
+
+# A newer push supersedes a build still in progress.
+concurrency:
+  group: windows-exe-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   exe:
