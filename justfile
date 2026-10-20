@@ -35,6 +35,10 @@ update-exe:
     ./gradlew createDistributable
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/update-installed-exe.ps1
 
+# Build the EXE on GitHub Actions for the pushed HEAD, save it in _apk/, and share it via Gokapi.
+ci-exe:
+    bash scripts/ci-exe
+
 # Build the AppImage and install it to ~/apps with a desktop entry, so
 # KDE/vicinae launchers can start it by name regardless of build file names.
 install:

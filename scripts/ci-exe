@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Build the Windows EXE on GitHub Actions for the pushed HEAD, download it
+# into _apk/, delete the GitHub artifact, and upload it to the private Gokapi
+# share. Prints the share link last.
+set -euo pipefail
+
+workflow=windows-exe.yml
+share=~/docker/files/bin/share
+
+git fetch --quiet origin
+head=$(git rev-parse HEAD)
+branch=$(git branch --show-current)
+if [[ "$head" != "$(git rev-parse "origin/$branch")" ]]; then
+  echo "HEAD is not pushed to origin/$branch; push first so CI builds this commit." >&2
+  exit 1
+fi
+
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+gh workflow run "$workflow" --ref "$branch"
+
+# The dispatch call doesn't return the run id; poll for the run created after it.
+run_id=""
+for _ in $(seq 30); do
+  run_id=$(gh run list --workflow "$workflow" --commit "$head" --event workflow_dispatch \
+    --limit 5 --json databaseId,createdAt \
+    --jq "[.[] | select(.createdAt >= \"$since\")][0].databaseId // empty")
+  [[ -n "$run_id" ]] && break
+  sleep 2
+done
+[[ -n "$run_id" ]] || { echo "Workflow run did not appear." >&2; exit 1; }
+
+gh run watch "$run_id" --exit-status
+
+out=$(mktemp -d)
+trap 'rm -rf "$out"' EXIT
+gh run download "$run_id" --name lyrics-float-exe --dir "$out"
+mkdir -p _apk
+exe=$(find "$out" -name '*.exe' -print -quit)
+cp "$exe" _apk/
+staged="$PWD/_apk/$(basename "$exe")"
+echo "Saved: $staged"
+
+# The local copy is the keeper; drop the GitHub artifact so it stops using
+# Actions storage. Retention (7 days) only covers a failed download.
+artifact_id=$(gh api "repos/{owner}/{repo}/actions/runs/$run_id/artifacts" \
+  --jq '.artifacts[] | select(.name == "lyrics-float-exe") | .id')
+gh api -X DELETE "repos/{owner}/{repo}/actions/artifacts/$artifact_id"
+
+"$share" "$staged"
