@@ -5,6 +5,8 @@
 set -euo pipefail
 
 workflow=windows-exe.yml
+artifact=lyrics-float-exe
+ext=exe
 share=~/docker/files/bin/share
 
 git fetch --quiet origin
@@ -33,17 +35,17 @@ gh run watch "$run_id" --exit-status
 
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
-gh run download "$run_id" --name lyrics-float-exe --dir "$out"
+gh run download "$run_id" --name "$artifact" --dir "$out"
 mkdir -p _apk
-exe=$(find "$out" -name '*.exe' -print -quit)
-cp "$exe" _apk/
-staged="$PWD/_apk/$(basename "$exe")"
+file=$(find "$out" -name "*.$ext" -print -quit)
+cp "$file" _apk/
+staged="$PWD/_apk/$(basename "$file")"
 echo "Saved: $staged"
 
 # The local copy is the keeper; drop the GitHub artifact so it stops using
 # Actions storage. Retention (7 days) only covers a failed download.
 artifact_id=$(gh api "repos/{owner}/{repo}/actions/runs/$run_id/artifacts" \
-  --jq '.artifacts[] | select(.name == "lyrics-float-exe") | .id')
+  --jq ".artifacts[] | select(.name == \"$artifact\") | .id")
 gh api -X DELETE "repos/{owner}/{repo}/actions/artifacts/$artifact_id"
 
 "$share" "$staged"
